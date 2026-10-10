@@ -1,10 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ApiError, createShare, listShares, revokeShare, shareUrl } from "@/lib/api";
 import { formatAgo, formatIn } from "@/lib/format";
-import type { SharedLink, ShareExpiry } from "@/lib/types";
+import type { SharedLink, ShareExpiry, ShareTarget } from "@/lib/types";
 import { IconCheck, IconLink, IconShare, IconTrash } from "./icons";
 
 const EXPIRIES: { key: ShareExpiry; label: string }[] = [
@@ -16,7 +16,7 @@ const EXPIRIES: { key: ShareExpiry; label: string }[] = [
 
 const message = (err: unknown) => (err instanceof ApiError ? err.message : "Can’t reach the server.");
 
-/** One link: its address to copy or send on, how long it lasts, and revoke. `withTitle`: say which video (in Settings). */
+/** One link: its address to copy or send on, how long it lasts, and revoke. `withTitle`: say which video or playlist (in Settings). */
 export function ShareLinkRow({ link, onRevoked, withTitle = false }: { link: SharedLink; onRevoked: () => void; withTitle?: boolean }) {
   const url = shareUrl(link);
   const [copied, setCopied] = useState(false);
@@ -48,7 +48,16 @@ export function ShareLinkRow({ link, onRevoked, withTitle = false }: { link: Sha
   return (
     <li className="share-link" aria-busy={busy}>
       {withTitle && (
-        <span className="share-link-title">{link.title ? <Link href={`/v/${link.videoId}`}>{link.title}</Link> : "A deleted video"}</span>
+        <span className="share-link-title">
+          {link.playlistId ? "Playlist: " : ""}
+          {link.title ? (
+            <Link href={link.playlistId ? `/p/${link.playlistId}` : `/v/${link.videoId}`}>{link.title}</Link>
+          ) : link.playlistId ? (
+            "deleted"
+          ) : (
+            "A deleted video"
+          )}
+        </span>
       )}
       <input className="share-link-url" value={url} readOnly aria-label="Share link" onFocus={(e) => e.currentTarget.select()} />
       <span className="share-link-actions">
@@ -72,8 +81,14 @@ export function ShareLinkRow({ link, onRevoked, withTitle = false }: { link: Sha
   );
 }
 
-/** The player's Share button: make a link anyone can watch the video from, and the ones made already. */
-export default function ShareButton({ videoId, title }: { videoId: string; title: string }) {
+type ButtonProps = { of: ShareTarget; title: string; small?: boolean };
+
+/** Share, under a video or on a playlist's page: make a link anyone can watch from, and the ones made already. */
+export default function ShareButton({ of, title, small = true }: ButtonProps) {
+  // `of` is a new object each render: the effect below follows `key`, what it names.
+  const target = useRef(of);
+  target.current = of;
+  const key = "videoId" in of ? `v:${of.videoId}` : `p:${of.playlistId}`;
   const [open, setOpen] = useState(false);
   const [links, setLinks] = useState<SharedLink[] | null>(null);
   const [expires, setExpires] = useState<ShareExpiry>("1w");
@@ -82,14 +97,14 @@ export default function ShareButton({ videoId, title }: { videoId: string; title
 
   useEffect(() => {
     if (!open) return;
-    listShares(videoId).then(setLinks, (err) => setError(message(err)));
-  }, [open, videoId]);
+    listShares(target.current).then(setLinks, (err) => setError(message(err)));
+  }, [open, key]);
 
   const create = async () => {
     setBusy(true);
     setError(null);
     try {
-      const s = await createShare(videoId, expires);
+      const s = await createShare(of, expires);
       setLinks((ls) => [{ ...s, title }, ...(ls ?? [])]);
     } catch (err) {
       setError(message(err));
@@ -100,12 +115,16 @@ export default function ShareButton({ videoId, title }: { videoId: string; title
 
   return (
     <div className="share">
-      <button type="button" className="btn btn-small" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+      <button type="button" className={`btn ${small ? "btn-small" : ""}`} aria-expanded={open} onClick={() => setOpen((o) => !o)}>
         <IconShare /> Share
       </button>
       {open && (
         <section className="share-panel" aria-label="Share links">
-          <p className="share-text">Anyone with a link can watch and download this video, without the password, until it expires or you revoke it.</p>
+          <p className="share-text">
+            {"videoId" in of
+              ? "Anyone with a link can watch and download this video, without the password, until it expires or you revoke it."
+              : "Anyone with a link can watch and download this playlist’s videos, as the playlist is when they open it (videos you add later too), without the password, until it expires or you revoke it."}
+          </p>
           <div className="share-new">
             <span className="share-label" id="share-expiry">
               Expires after
@@ -151,7 +170,7 @@ export function SharedLinks() {
   return (
     <>
       {error && <p className="welcome-error">Couldn’t ask the server.</p>}
-      {links?.length === 0 && <p className="settings-hint">No links. Make one with Share, under a video.</p>}
+      {links?.length === 0 && <p className="settings-hint">No links. Make one with Share, under a video or on a playlist.</p>}
       {links && links.length > 0 && (
         <ul className="share-links">
           {links.map((l) => (

@@ -9,7 +9,7 @@ videos/<id>/video.mp4   the video (or .webm, or the original extension when it c
             thumb.jpg   640px still (from yt-dlp for YouTube, else ffmpeg at 10% in, max 10s)
 playlists/<id>.json     a Playlist (lib/types.ts): title, items (video ids, in order), and
                         for one downloaded from YouTube its list id, link and channel
-shares/<token>.json     a share link (lib/types.ts Share): the video, when made, when it expires (null: never)
+shares/<token>.json     a share link (lib/types.ts Share): its video or playlist, when made, when it expires (null: never)
 Browse/                 the library under its titles, as links into videos/ (see Browse, below)
 .browse.<random>/       Browse/ being rebuilt; removed at startup if a stop left one
 .trash/<id>.<ms>/       deleted videos (and playlist-<id>.<ms>.json, deleted playlists); nothing empties it
@@ -58,6 +58,6 @@ Browse/Playlists/<Playlist>/01 - <Title>.mp4    -> ../../../videos/<id>/video.mp
 
 ## Share links
 
-`lib/shares.ts`. A link is a file named by its token (128 random bits in hex, `isValidShareToken`), made exclusively (`createExclusive`), holding the video's id, when it was made and when it expires (`null`: never). `/s/<token>` and `/api/s/<token>/…` play that one video without a session while `getShare()` finds it unexpired ([api](api.md), [pages](pages.md#a-share-link-stoken-appstokenpagetsx)). Revoking deletes the file. Expiry is `1d`, `1w`, `1m` (an average month, so the page says "1 month") or `never`.
+`lib/shares.ts`. A link is a file named by its token (128 random bits in hex, `isValidShareToken`), made exclusively (`createExclusive`), holding the id of a video (`videoId`) or a playlist (`playlistId`), when it was made and when it expires (`null`: never). `/s/<token>` and `/api/s/<token>/…` play that one video, or the playlist's, without a session while `getShare()` finds it unexpired. A playlist link is live: `sharedVideo()` checks on every request that the video is in the playlist (and the library) now, so one taken out stops playing and one added starts ([api](api.md), [pages](pages.md#a-share-link-stoken-appstokenpagetsx)). Revoking deletes the file. Expiry is `1d`, `1w`, `1m` (an average month, so the page says "1 month") or `never`.
 
-Cast links (`cast: true`) are the same, made for a Cast device ([pages](pages.md#casting)): a day long, reused for the same video while they have half a day left, and never listed. At startup `cleanShares()` deletes expired links and ones whose video is gone (trashing a video doesn't, since a re-download trashes and replaces it under the same id).
+Cast links (`cast: true`) are the same, made for a Cast device ([pages](pages.md#casting)): a day long, reused for the same video while they have half a day left, and never listed. At startup `cleanShares()` deletes expired links and ones whose video or playlist is gone (trashing a video doesn't, since a re-download trashes and replaces it under the same id).

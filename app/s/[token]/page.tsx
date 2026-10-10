@@ -3,23 +3,42 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { IconDownload, IconWarn } from "@/components/icons";
 import Logo from "@/components/Logo";
+import SharedPlaylist, { type SharedItem } from "@/components/SharedPlaylist";
 import ThemeButton from "@/components/ThemeButton";
 import { formatDuration, formatHeight, formatSize } from "@/lib/format";
-import { getVideo } from "@/lib/library";
-import { getShare } from "@/lib/shares";
+import { getShare, sharedPlaylist, sharedVideo } from "@/lib/shares";
+import type { Playlist, Video } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
-type Props = { params: Promise<{ token: string }> };
+type Props = { params: Promise<{ token: string }>; searchParams: Promise<{ v?: string | string[] }> };
 
-// A share link (/s/<token>): one video, for anyone with the link. No session,
-// so nothing here leads into the library, and watching changes nothing in it.
+// A share link (/s/<token>): one video, or a playlist's, for anyone with the
+// link. No session, so nothing here leads into the library, and watching
+// changes nothing in it.
 
-async function shared(token: string) {
+type Found = { video: Video } | { playlist: Playlist; videos: Video[] };
+
+async function shared(token: string): Promise<Found | null> {
   const share = await getShare(token);
-  const video = share && (await getVideo(share.videoId));
-  return video ? { share, video } : null;
+  if (!share) return null;
+  if (share.playlistId) return sharedPlaylist(share);
+  const video = await sharedVideo(share);
+  return video && { video };
 }
+
+/** Only what the page shows: a video's meta.json says more (how it was watched, where it came from). */
+const item = (v: Video): SharedItem => ({
+  id: v.id,
+  title: v.title,
+  channel: v.channel,
+  duration: v.duration,
+  height: v.height,
+  size: v.size,
+  hasThumb: v.hasThumb,
+  playable: v.playable,
+  videoCodec: v.videoCodec,
+});
 
 /** This server as the visitor reached it (behind nginx, from its forwarded headers): previews need absolute links. */
 async function origin() {
@@ -35,8 +54,23 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   // Shared, not published: search engines keep out.
   const robots = { index: false, follow: false };
   if (!found) return { title: "media", robots };
-  const { video: v } = found;
   const base = await origin();
+  if ("playlist" in found) {
+    const { playlist: p, videos } = found;
+    const first = videos.find((v) => v.hasThumb);
+    return {
+      title: p.title,
+      description: `A playlist of ${videos.length} ${videos.length === 1 ? "video" : "videos"} shared from media`,
+      robots,
+      openGraph: {
+        title: p.title,
+        url: `${base}/s/${token}`,
+        images: first ? [{ url: `${base}/api/s/${token}/v/${first.id}/thumb`, width: 640 }] : undefined,
+      },
+      twitter: { card: first ? "summary_large_image" : "summary", title: p.title },
+    };
+  }
+  const { video: v } = found;
   return {
     title: v.title,
     description: v.channel ?? "A video shared from media",
@@ -52,24 +86,40 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-export default async function Page({ params }: Props) {
+function Header() {
+  return (
+    <header className="topbar">
+      <span className="wordmark">
+        <Logo />
+        <span>media</span>
+      </span>
+      <div className="topbar-right">
+        <ThemeButton />
+      </div>
+    </header>
+  );
+}
+
+export default async function Page({ params, searchParams }: Props) {
   const { token } = await params;
   const found = await shared(token);
   if (!found) notFound();
+  if ("playlist" in found) {
+    const { v: want } = await searchParams;
+    const start = Math.max(0, found.videos.findIndex((v) => v.id === want));
+    return (
+      <div className="app app-player">
+        <Header />
+        <SharedPlaylist token={token} title={found.playlist.title} channel={found.playlist.channel} videos={found.videos.map(item)} start={start} />
+      </div>
+    );
+  }
   const { video: v } = found;
   const file = `/api/s/${token}/file`;
   const details = [v.duration ? formatDuration(v.duration) : null, formatHeight(v.height), formatSize(v.size)].filter(Boolean);
   return (
     <div className="app app-player">
-      <header className="topbar">
-        <span className="wordmark">
-          <Logo />
-          <span>media</span>
-        </span>
-        <div className="topbar-right">
-          <ThemeButton />
-        </div>
-      </header>
+      <Header />
       <main className="watch watch-shared">
         <section className="stage">
           <div className="screen">

@@ -3,7 +3,7 @@
 // throws an ApiError carrying the server's own message ({ error } in the body).
 // Uploads (with progress) and beacons use XHR and sendBeacon directly.
 
-import type { Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, Video, YoutubePlaylist } from "./types";
+import type { Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, ShareTarget, Video, YoutubePlaylist } from "./types";
 import { playlistUrl } from "./youtube";
 
 export class ApiError extends Error {
@@ -95,11 +95,13 @@ export function saveProgress(id: string, body: { position: number; started?: boo
   return api(path, { method: "POST", body: data, keepalive: true }).catch(() => {});
 }
 
-/** The share links still good: all of them, or one video's. */
-export const listShares = (video?: string) => api<SharedLink[]>(video ? `/api/shares?video=${encodeURIComponent(video)}` : "/api/shares");
+/** The share links still good: all of them, or one video's or playlist's. */
+export const listShares = (of?: ShareTarget) =>
+  api<SharedLink[]>(!of ? "/api/shares" : "videoId" in of ? `/api/shares?video=${of.videoId}` : `/api/shares?playlist=${of.playlistId}`);
 
-/** A new share link for a video. */
-export const createShare = (video: string, expires: ShareExpiry) => api<Share>("/api/shares", { method: "POST", json: { video, expires } });
+/** A new share link for a video or a playlist. */
+export const createShare = (of: ShareTarget, expires: ShareExpiry) =>
+  api<Share>("/api/shares", { method: "POST", json: { ...("videoId" in of ? { video: of.videoId } : { playlist: of.playlistId }), expires } });
 
 /** A short-lived link a Cast device can play the video from. */
 export const castShare = (video: string) => api<Share>("/api/shares", { method: "POST", json: { video, cast: true } });

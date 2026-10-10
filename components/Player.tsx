@@ -272,7 +272,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               )}
             </p>
             <div className="watch-actions">
-              <ShareButton videoId={v.id} title={v.title} />
+              <ShareButton of={{ videoId: v.id }} title={v.title} />
               {cast.available && (
                 <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
                   <IconCast /> {cast.device ? "Casting" : "Cast"}

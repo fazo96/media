@@ -10,6 +10,7 @@ import type { Job, Playlist, Video } from "@/lib/types";
 import { youtubeUrl } from "@/lib/youtube";
 import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconPlay, IconRefresh, IconTrash } from "./icons";
 import { playlistCount } from "./PlaylistCard";
+import ShareButton from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
 import { thumbUrl } from "./VideoCard";
 
@@ -173,6 +174,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
             >
               <IconEdit /> Rename
             </button>
+            <ShareButton of={{ playlistId: p.id }} title={p.title} small={false} />
             {mode === "delete" ? (
               <span className="confirm">
                 <span>Delete the playlist? Its videos stay in the library.</span>

@@ -24,7 +24,7 @@ A native `<video>` streaming `/api/videos/<id>/file`. It resumes from `position`
 
 Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too). Shift+N and Shift+P go to the next and previous.
 
-Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](library.md#share-links) for the video, lasting 1 day, 1 week (the default), 1 month or until revoked, and lists the video's links: copy, send (the system share sheet, where there is one) and revoke. **Cast** is there when a Cast device is (see Casting, below).
+Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](library.md#share-links) for the video (a playlist's page has the same button, for the playlist), lasting 1 day, 1 week (the default), 1 month or until revoked, and lists the video's links: copy, send (the system share sheet, where there is one) and revoke. **Cast** is there when a Cast device is (see Casting, below).
 
 ## Casting
 
@@ -36,13 +36,15 @@ The device fetches the file itself, so it must reach the server at the address t
 
 No session needed: the video with its title, details and **Download**, and nothing that leads into the library; watching doesn't count as a play or save a place. Its metadata gives chat apps a preview (`og:` title, still and video, from absolute URLs built from the forwarded host) and tells search engines to keep out (`noindex`). An expired or revoked link is a 404 saying so (`app/s/[token]/not-found.tsx`). The service worker doesn't keep these pages.
 
+A playlist link's page is `components/SharedPlaylist.tsx`: the playlist's videos in the library, as the playlist is now, beside the player, playing one after another (each from `/api/s/<token>/v/<id>/`, with its own Download). Picking one, or the next starting, puts it in the address (`?v=<id>`), so a reload stays there; the first one doesn't autoplay. The page gets only what it shows of each video (`SharedItem`), not how it was watched or where it came from. Its preview is the playlist's title and its first still.
+
 ## Settings (`/settings`)
 
 The tools found (`GET /api/tools`), the share links still good (any can be revoked; cast links aren't listed), and the lock.
 
 ## The lock
 
-From pen, unchanged: an optional password (`lib/auth.ts`, scrypt; session cookie `media_session`, HMAC-signed, 90 days). `proxy.ts` and `route()` both check. A share link is the one way past it, for one video; changing the password doesn't end share links (revoking does). Delete `MEDIA_DIR/.media-auth.json` to remove a forgotten password.
+From pen, unchanged: an optional password (`lib/auth.ts`, scrypt; session cookie `media_session`, HMAC-signed, 90 days). `proxy.ts` and `route()` both check. A share link is the one way past it, for one video or one playlist's; changing the password doesn't end share links (revoking does). Delete `MEDIA_DIR/.media-auth.json` to remove a forgotten password.
 
 ## Offline
 

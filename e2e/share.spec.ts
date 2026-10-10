@@ -97,3 +97,58 @@ test("make a link from the player, open it elsewhere, and revoke it in Settings"
   expect((await other.goto(link))?.status()).toBe(404);
   await stranger.close();
 });
+
+test("a playlist link plays the playlist as it is, one after another, and nothing else", async ({ page, request, browser }) => {
+  const a = await upload(request, `${unique("List one")}.mp4`);
+  const b = await upload(request, `${unique("List two")}.mp4`);
+  const outside = await upload(request, `${unique("Not in the list")}.mp4`);
+  const { playlist } = await (await request.post("/api/playlists", { data: { title: unique("Shared list") } })).json();
+  await request.patch(`/api/playlists/${playlist.id}`, { data: { add: [a.id, b.id] } });
+
+  await page.goto(`/p/${playlist.id}`);
+  await page.getByRole("button", { name: "Share" }).click();
+  await expect(page.locator(".share-text")).toContainText("playlist’s videos");
+  await page.getByRole("button", { name: "Make a link" }).click();
+  const link = await page.getByRole("textbox", { name: "Share link", exact: true }).inputValue();
+  const token = link.split("/s/")[1];
+  expect((await (await request.get(`/api/shares?playlist=${playlist.id}`)).json())[0].title).toBe(playlist.title);
+
+  expect((await request.post("/api/auth", { data: { action: "set", password: PASSWORD } })).ok()).toBe(true);
+  const stranger = await browser.newContext();
+  try {
+    const get = (path: string) => stranger.request.get(path, { headers: { Range: "bytes=0-9" } });
+    expect((await get(`/api/s/${token}/v/${a.id}/file`)).status()).toBe(206);
+    expect((await get(`/api/s/${token}/v/${b.id}/thumb`)).status()).toBe(200);
+    expect((await get(`/api/s/${token}/v/${outside.id}/file`)).status()).toBe(404);
+    expect((await get(`/api/s/${token}/file`)).status()).toBe(404); // a playlist link has no video of its own
+
+    const other = await stranger.newPage();
+    await other.goto(link);
+    await expect(other.locator(".others h2")).toContainText(`${playlist.title} · 1 / 2`);
+    await expect(other.locator(".watch-title")).toHaveText(a.title);
+    expect(await other.locator('a[href="/"], a[href^="/v/"], a[href^="/p/"]').count()).toBe(0);
+    // At the end, the next one plays.
+    await other.locator("video").evaluate((el: HTMLVideoElement) => {
+      el.muted = true;
+      el.currentTime = el.duration ? el.duration - 0.5 : 29.5;
+      return el.play();
+    });
+    await expect(other.locator(".watch-title")).toHaveText(b.title);
+    await expect(other).toHaveURL(new RegExp(`\\?v=${b.id}$`));
+    await expect.poll(() => other.locator("video").evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(0.2);
+
+    // Live: taken out of the playlist, it's gone from the link; added, it's there.
+    await request.patch(`/api/playlists/${playlist.id}`, { data: { remove: [a.id], add: [outside.id] } });
+    expect((await get(`/api/s/${token}/v/${a.id}/file`)).status()).toBe(404);
+    expect((await get(`/api/s/${token}/v/${outside.id}/file`)).status()).toBe(206);
+    await other.reload();
+    await expect(other.locator(".others li")).toHaveCount(2);
+    await expect(other.locator(".watch-title")).toHaveText(b.title);
+
+    await request.delete(`/api/playlists/${playlist.id}`);
+    expect((await other.goto(link))?.status()).toBe(404);
+  } finally {
+    await stranger.close();
+    await request.post("/api/auth", { data: { action: "remove", current: PASSWORD } });
+  }
+});

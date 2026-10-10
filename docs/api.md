@@ -13,9 +13,10 @@
 | `GET /api/youtube/playlist?list=…` | A YouTube playlist read whole ([downloads](downloads.md#playlists)), `YoutubePlaylist`, with `playlistId` when it was downloaded before; nothing is downloaded. 400 when `list` isn't a playlist link or id, 502, 504 |
 | `GET/POST /api/playlists` | Every playlist, newest first; make one: `{ title }` (201 `{ playlist }`), or `{ youtube: <link or id> }` to download a whole YouTube playlist (201 `{ playlist, jobs }`; 502, 504 as above) |
 | `GET/PATCH/DELETE /api/playlists/<id>` | One playlist; `{ title?, add?, remove? }` (video ids: `add` must be in the library, and goes at the end); to the trash, its videos staying |
-| `GET/POST /api/shares` | Share links still good, newest first, with their videos' titles (`?video=<id>`: one video's; cast links aren't listed); make one: `{ video, expires }` with `"1d"`, `"1w"`, `"1m"` or `"never"` (201, the `Share`), or `{ video, cast: true }` for a Cast device (a day long, reused while it has half of that left) |
+| `GET/POST /api/shares` | Share links still good, newest first, with their videos' or playlists' titles (`?video=<id>` or `?playlist=<id>`: that one's; cast links aren't listed); make one: `{ video, expires }` or `{ playlist, expires }` with `"1d"`, `"1w"`, `"1m"` or `"never"` (201, the `Share`), or `{ video, cast: true }` for a Cast device (a day long, reused while it has half of that left) |
 | `DELETE /api/shares/<token>` | Revoke a link (204; 404 when there's none) |
-| `GET/HEAD /api/s/<token>/file`, `GET /api/s/<token>/thumb` | **No session**: a share link's video (as `/api/videos/<id>/file`, `?download` as an attachment named for its title) and still, with `Access-Control-Allow-Origin: *`; 404 once the link has expired or been revoked |
+| `GET/HEAD /api/s/<token>/file`, `GET /api/s/<token>/thumb` | **No session**: a share link's video (as `/api/videos/<id>/file`, `?download` as an attachment named for its title) and still, with `Access-Control-Allow-Origin: *`; 404 once the link has expired or been revoked, and for a playlist link (it has no video of its own) |
+| `GET/HEAD /api/s/<token>/v/<id>/file`, `GET /api/s/<token>/v/<id>/thumb` | **No session**: the same for one of a playlist link's videos, while it's in the playlist (checked on every request, `sharedVideo()`); 404 for any other video, and for a video link |
 | `GET /api/tools` | yt-dlp, ffmpeg, ffprobe: how each runs, its version |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 
