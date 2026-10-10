@@ -122,3 +122,9 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const { url } = await startStub({ port: Number(port), root: path.resolve(root) });
   console.log(`stub Transmission at ${url}`);
 }
+
+/** Call the stub's RPC (`url`: its /transmission/rpc) with the session id it wants: its `arguments`. `stub-reset` and `stub-removed` are its own. */
+export async function stubCall(url, method) {
+  const res = await fetch(url, { method: "POST", headers: { "X-Transmission-Session-Id": "stub-session-id" }, body: JSON.stringify({ method }) });
+  return (await res.json()).arguments;
+}

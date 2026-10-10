@@ -5,17 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { addVideo, audioFile, getVideo, incomingDir, listVideos, NotAVideo, trashVideo, updateVideo, videoFile, withListen } from "../lib/library.ts";
 import { TRASH_DIR } from "../lib/paths.ts";
-
-// Real ffmpeg: in `nix develop` it's on PATH; elsewhere these skip.
-const ffmpeg = (() => {
-  try {
-    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-})();
-const FIXTURE = path.resolve("tests/fixtures/clip.mp4");
+import { FIXTURE, hasFfmpeg } from "./helpers.ts";
 
 async function incoming(name: string, from = FIXTURE) {
   const file = path.join(await incomingDir(), name);
@@ -23,7 +13,7 @@ async function incoming(name: string, from = FIXTURE) {
   return file;
 }
 
-test("a dropped mp4 joins the library as it is, with a thumbnail", { skip: !ffmpeg }, async () => {
+test("a dropped mp4 joins the library as it is, with a thumbnail", { skip: !hasFfmpeg }, async () => {
   const v = await addVideo(await incoming("upload.mp4"), { title: "My Clip", source: "file", originalName: "My Clip.mp4" });
   assert.equal(v.id, "my-clip");
   assert.equal(v.file, "video.mp4");
@@ -41,7 +31,7 @@ test("a dropped mp4 joins the library as it is, with a thumbnail", { skip: !ffmp
   assert.deepEqual((await listVideos()).map((x) => x.id).sort(), ["my-clip", "my-clip-2"]);
 });
 
-test("an mkv with H.264 is remuxed to mp4", { skip: !ffmpeg }, async () => {
+test("an mkv with H.264 is remuxed to mp4", { skip: !hasFfmpeg }, async () => {
   const dir = await incomingDir();
   const mkv = path.join(dir, "upload.mkv");
   execFileSync("ffmpeg", ["-v", "error", "-i", FIXTURE, "-c", "copy", mkv]);
@@ -52,7 +42,7 @@ test("an mkv with H.264 is remuxed to mp4", { skip: !ffmpeg }, async () => {
   await assert.rejects(stat(dir));
 });
 
-test("an mkv in two languages plays the one wanted, converted to AAC, and keeps the other", { skip: !ffmpeg }, async () => {
+test("an mkv in two languages plays the one wanted, converted to AAC, and keeps the other", { skip: !hasFfmpeg }, async () => {
   const dir = await incomingDir();
   const mkv = path.join(dir, "film.mkv");
   // English AAC first (and default), Italian AC-3 second, as the fixture's video.
@@ -93,13 +83,13 @@ test("an mkv in two languages plays the one wanted, converted to AAC, and keeps 
   }
 });
 
-test("a file that isn't a video is turned away", { skip: !ffmpeg }, async () => {
+test("a file that isn't a video is turned away", { skip: !hasFfmpeg }, async () => {
   const file = path.join(await incomingDir(), "notes.mp4");
   await (await import("node:fs/promises")).writeFile(file, "not a video");
   await assert.rejects(addVideo(file, { title: "Notes", source: "file", originalName: "notes.mp4" }), NotAVideo);
 });
 
-test("a forced id replaces the old video but keeps its watching", { skip: !ffmpeg }, async () => {
+test("a forced id replaces the old video but keeps its watching", { skip: !hasFfmpeg }, async () => {
   const details = { title: "Song", source: "youtube" as const, youtubeId: "abcdefghijk", originalName: "video.mp4" };
   const first = await addVideo(await incoming("video.mp4"), details, { id: "yt-abcdefghijk-0" });
   await updateVideo(first.id, (v) => ({ ...v, playCount: 4, position: 1.5, lastPlayedAt: 123 , listen: true }));
@@ -112,13 +102,13 @@ test("a forced id replaces the old video but keeps its watching", { skip: !ffmpe
   assert.ok((await readdir(TRASH_DIR)).some((n) => n.startsWith("yt-abcdefghijk-0.")));
 });
 
-test("updates to one video go one at a time", { skip: !ffmpeg }, async () => {
+test("updates to one video go one at a time", { skip: !hasFfmpeg }, async () => {
   const v = await addVideo(await incoming("upload.mp4"), { title: "Counter", source: "file", originalName: "c.mp4" });
   await Promise.all(Array.from({ length: 20 }, () => updateVideo(v.id, (x) => ({ ...x, playCount: x.playCount + 1 }))));
   assert.equal((await getVideo(v.id))?.playCount, 20);
 });
 
-test("trashVideo moves it out of the library", { skip: !ffmpeg }, async () => {
+test("trashVideo moves it out of the library", { skip: !hasFfmpeg }, async () => {
   const v = await addVideo(await incoming("upload.mp4"), { title: "Bin me", source: "file", originalName: "b.mp4" });
   assert.equal(await trashVideo(v.id), true);
   assert.equal(await getVideo(v.id), null);
@@ -136,7 +126,7 @@ function streams(file: string) {
   ]);
 }
 
-test("listen mode's file is the audio alone, made once and kept", { skip: !ffmpeg }, async () => {
+test("listen mode's file is the audio alone, made once and kept", { skip: !hasFfmpeg }, async () => {
   const v = await addVideo(await incoming("upload.mp4"), { title: "Tune", source: "file", originalName: "tune.mp4" });
   // Asked for twice at once, it's made once.
   const [file, same] = await Promise.all([audioFile(v), audioFile(v)]);
@@ -149,7 +139,7 @@ test("listen mode's file is the audio alone, made once and kept", { skip: !ffmpe
   assert.deepEqual((await readdir(path.dirname(file as string))).sort(), ["audio.m4a", "meta.json", "thumb.jpg", "video.mp4"]);
 });
 
-test("listen mode's file is the track the video plays, of several", { skip: !ffmpeg }, async () => {
+test("listen mode's file is the track the video plays, of several", { skip: !hasFfmpeg }, async () => {
   const dir = await incomingDir();
   const mkv = path.join(dir, "film.mkv");
   execFileSync("ffmpeg", [
@@ -166,7 +156,7 @@ test("listen mode's file is the track the video plays, of several", { skip: !ffm
   }
 });
 
-test("a video without audio has no listen mode file", { skip: !ffmpeg }, async () => {
+test("a video without audio has no listen mode file", { skip: !hasFfmpeg }, async () => {
   const silent = path.join(await incomingDir(), "silent.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-i", FIXTURE, "-an", "-c", "copy", silent]);
   const v = await addVideo(silent, { title: "Silent", source: "file", originalName: "silent.mp4" });
@@ -194,7 +184,7 @@ async function tone(name: string, args: string[], cover = false) {
   return file;
 }
 
-test("a dropped mp3 is music: kept as it is, with its cover, its tags and listen mode", { skip: !ffmpeg }, async () => {
+test("a dropped mp3 is music: kept as it is, with its cover, its tags and listen mode", { skip: !hasFfmpeg }, async () => {
   const mp3 = await tone("upload.mp3", ["-c:a", "libmp3lame", "-b:a", "64k", "-id3v2_version", "3", "-metadata", "title=Tone Song", "-metadata", "artist=The Testers"], true);
   const v = await addVideo(mp3, { title: "01 tone song", source: "file", originalName: "01 tone song.mp3" });
   assert.equal(v.id, "tone-song");
@@ -214,7 +204,7 @@ test("a dropped mp3 is music: kept as it is, with its cover, its tags and listen
   assert.deepEqual((await readdir(path.dirname(videoFile(v)))).sort(), ["meta.json", "thumb.jpg", "track.mp3"]);
 });
 
-test("music in a container browsers don't play has its track copied into m4a", { skip: !ffmpeg }, async () => {
+test("music in a container browsers don't play has its track copied into m4a", { skip: !hasFfmpeg }, async () => {
   const mka = await tone("upload.mka", ["-c:a", "flac"]);
   const v = await addVideo(mka, { title: "Lossless", source: "file", originalName: "Lossless.mka" });
   assert.equal(v.file, "track.m4a");
@@ -225,7 +215,7 @@ test("music in a container browsers don't play has its track copied into m4a", {
   assert.deepEqual(streams(videoFile(v)), [["audio", "flac", "und"]]);
 });
 
-test("music browsers can't play is converted to AAC", { skip: !ffmpeg }, async () => {
+test("music browsers can't play is converted to AAC", { skip: !hasFfmpeg }, async () => {
   const wma = await tone("upload.wma", ["-c:a", "wmav2"]);
   const v = await addVideo(wma, { title: "Old Format", source: "file", originalName: "Old Format.wma" });
   assert.equal(v.file, "track.m4a");

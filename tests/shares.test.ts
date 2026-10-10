@@ -1,18 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { readdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
-import { videoDir } from "../lib/library.ts";
 import { SHARES_DIR } from "../lib/paths.ts";
 import { createPlaylist, trashPlaylist, updatePlaylist } from "../lib/playlists.ts";
 import { castShare, cleanShares, createShare, EXPIRY_MS, getShare, listShares, revokeShare, sharedPlaylist, sharedVideo } from "../lib/shares.ts";
 import type { Share } from "../lib/types.ts";
+import { fakeVideo } from "./helpers.ts";
 
-// Just enough of a video for getVideo() to find it.
-async function video(id: string) {
-  await mkdir(videoDir(id), { recursive: true });
-  await writeFile(path.join(videoDir(id), "meta.json"), JSON.stringify({ id, title: id, file: "video.mp4", addedAt: 1 }));
-}
+const video = (id: string) => fakeVideo(id);
 
 test("a share link works until it's revoked", async () => {
   await video("shared");

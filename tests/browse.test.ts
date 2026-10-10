@@ -1,25 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdir, readdir, readlink, realpath, stat, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readlink, realpath, stat, } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
 import { buildBrowse, cleanBrowse, fileName } from "../lib/browse.ts";
 import { trashVideo, videoDir } from "../lib/library.ts";
 import { BROWSE_DIR, MEDIA_DIR } from "../lib/paths.ts";
 import { createPlaylist } from "../lib/playlists.ts";
-import type { Video } from "../lib/types.ts";
+import { fakeVideo } from "./helpers.ts";
 
-// A video as addVideo leaves it, without ffmpeg: meta.json, a file, a still.
-async function video(id: string, title: string, addedAt: number, { hasThumb = true, file = "video.mp4" } = {}) {
-  const v: Video = {
-    id, title, source: "file", file, mime: "video/mp4", size: 1, duration: 1,
-    playable: true, hasThumb, addedAt, playCount: 0, position: 0,
-  };
-  await mkdir(videoDir(id), { recursive: true });
-  await writeFile(path.join(videoDir(id), "meta.json"), JSON.stringify(v));
-  await writeFile(path.join(videoDir(id), file), id);
-  if (hasThumb) await writeFile(path.join(videoDir(id), "thumb.jpg"), "jpg");
-  return v;
-}
+const video = (id: string, title: string, addedAt: number, { hasThumb = true, file = "video.mp4" } = {}) => fakeVideo(id, { title, addedAt, hasThumb, file });
 
 test("fileName keeps a title readable and takes out what SMB won't have", () => {
   assert.equal(fileName("Never Gonna Give You Up"), "Never Gonna Give You Up");

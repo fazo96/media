@@ -1,9 +1,8 @@
 import assert from "node:assert/strict";
-import { execFileSync } from "node:child_process";
 import { access, readdir } from "node:fs/promises";
 import path from "node:path";
 import { after, before, test } from "node:test";
-import { startStub } from "../e2e/stub-transmission.mjs";
+import { startStub, stubCall } from "../e2e/stub-transmission.mjs";
 import { getJob } from "../lib/jobs.ts";
 import { isActive } from "../lib/types.ts";
 import { getVideo } from "../lib/library.ts";
@@ -11,16 +10,8 @@ import { INCOMING_DIR, MEDIA_DIR } from "../lib/paths.ts";
 import { getPlaylist } from "../lib/playlists.ts";
 import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, playlistTitleOf, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
 import type { Job, Video } from "../lib/types.ts";
+import { hasFfmpeg } from "./helpers.ts";
 
-// Real ffmpeg (an import goes through addVideo): in `nix develop` it's on PATH; elsewhere those skip.
-const ffmpeg = (() => {
-  try {
-    execFileSync("ffmpeg", ["-version"], { stdio: "ignore" });
-    return true;
-  } catch {
-    return false;
-  }
-})();
 
 test("parsePathMap and mapPath swap Transmission's folders for ours", () => {
   const map = parsePathMap(" /downloads=/mnt/Big/Downloads/ ; /downloads/complete=/srv/done;bad;=x");
@@ -89,10 +80,7 @@ const A = "a".repeat(40);
 const B = "b".repeat(40);
 const D = "d".repeat(40);
 
-async function rpc(method: string) {
-  const call = () => fetch(stub.url, { method: "POST", headers: { "X-Transmission-Session-Id": "stub-session-id" }, body: JSON.stringify({ method }) });
-  return ((await (await call()).json()) as { arguments: Record<string, unknown> }).arguments;
-}
+const rpc = (method: string) => stubCall(stub.url, method);
 
 before(async () => {
   stub = await startStub({ root });
@@ -141,7 +129,7 @@ test("importTorrent refuses what it can't import", async () => {
   await assert.rejects(importTorrent("e".repeat(40), [0], false), (e: unknown) => e instanceof ImportError && e.status === 404);
 });
 
-test("an import copies the files in and leaves the torrent", { skip: !ffmpeg }, async () => {
+test("an import copies the files in and leaves the torrent", { skip: !hasFfmpeg }, async () => {
   await rpc("stub-reset");
   const job = await finish(await importTorrent(B, [1, 0], false));
   assert.equal(job.state, "done", job.error ?? "");
@@ -173,7 +161,7 @@ test("an import copies the files in and leaves the torrent", { skip: !ffmpeg }, 
   await assert.rejects(access(path.join(root, "complete/Stub Series")));
 });
 
-test("a failed import leaves the torrent alone", { skip: !ffmpeg }, async () => {
+test("a failed import leaves the torrent alone", { skip: !hasFfmpeg }, async () => {
   await rpc("stub-reset");
   const job = await finish(await importTorrent(D, [0], true));
   assert.equal(job.state, "failed");
@@ -181,7 +169,7 @@ test("a failed import leaves the torrent alone", { skip: !ffmpeg }, async () => 
   assert.deepEqual((await rpc("stub-removed")).removed, []);
 });
 
-test("an import removes the torrent when asked", { skip: !ffmpeg }, async () => {
+test("an import removes the torrent when asked", { skip: !hasFfmpeg }, async () => {
   await rpc("stub-reset");
   const job = await finish(await importTorrent(A, [0], true));
   assert.equal(job.state, "done", job.error ?? "");
