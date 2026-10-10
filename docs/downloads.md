@@ -11,7 +11,7 @@
 - `--no-playlist`: a watch link inside a playlist downloads the one video.
 - `--newline --progress-template` prints `media-progress <done> <total> <estimate> <speed> <eta>` lines, read by `parseProgress()`. Video and audio come down one after the other; when progress jumps back, `stream` goes up (the page says "audio").
 
-The result goes through `addVideo()` like a dropped file ([library](library.md#adding-a-video)), under the id `youtubeVideoId()`. A failure keeps yt-dlp's last `ERROR:` line as the job's error (`lastError()` in `lib/tools.ts`).
+The result goes through `addVideo()` like a dropped file ([library](library.md#adding-a-video)), under the id `youtubeVideoId()`, with the job's abort signal (dismissing it while processing stops ffmpeg too) and `onConvert` (the card says "Converting audio"). A failure keeps yt-dlp's last `ERROR:` line as the job's error (`lastError()` in `lib/tools.ts`).
 
 ## Searching
 

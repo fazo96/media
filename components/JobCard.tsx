@@ -40,7 +40,9 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
         : job.state === "processing"
           ? t
             ? [job.converting ? "Converting audio" : "Reading the video", of].filter(Boolean).join(" · ")
-            : "Finishing"
+            : job.converting
+              ? "Converting audio"
+              : "Finishing"
           : job.state === "done"
             ? "Added"
             : (job.error ?? "Failed");

@@ -175,8 +175,16 @@ async function download(job: Job) {
         channel: info.channel || info.uploader,
         originalName: video,
       },
-      { id: youtubeVideoId(ytId), thumb },
+      {
+        id: youtubeVideoId(ytId),
+        thumb,
+        signal: abort.signal,
+        onConvert: () => {
+          job.converting = true;
+        },
+      },
     );
+    job.converting = false;
     job.state = "done";
     job.videoId = v.id;
   } catch (err) {
