@@ -155,6 +155,9 @@ export type Share = {
   cast?: boolean;
 };
 
+/** What a share link's page knows of a video: enough to play and list it, nothing about watching it here. */
+export type SharedItem = Pick<Video, "id" | "title" | "channel" | "duration" | "height" | "size" | "hasThumb" | "playable" | "videoCodec">;
+
 /** A share link as GET /api/shares lists it: with its video's or playlist's title (none once that's deleted). */
 export type SharedLink = Share & { title?: string };
 

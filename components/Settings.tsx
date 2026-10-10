@@ -1,17 +1,15 @@
 "use client";
 
-import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import { formatSize } from "@/lib/format";
 import type { DiskUsage, ToolStatus } from "@/lib/types";
-import { IconBack, IconDisk, IconFilm, IconShare, IconWarn } from "./icons";
+import { IconDisk, IconFilm, IconShare, IconWarn } from "./icons";
 import LockSettings from "./LockSettings";
 import SettingsHead from "./SettingsHead";
 import { SharedLinks } from "./ShareLinks";
 import { isLow, StorageBar } from "./StorageMeter";
-import NowPlayingWidget from "./NowPlayingWidget";
-import ThemeButton from "./ThemeButton";
+import Topbar, { toLibrary } from "./Topbar";
 
 const PURPOSE: Record<string, string> = {
   "yt-dlp": "Downloads from YouTube",
@@ -102,16 +100,7 @@ function StorageSection() {
 export default function Settings({ locked }: { locked: boolean }) {
   return (
     <div className="app">
-      <header className="topbar">
-        <Link href="/" className="icon-btn" aria-label="Back to the library" title="Library">
-          <IconBack />
-        </Link>
-        <span className="topbar-title">Settings</span>
-        <div className="topbar-right">
-          <NowPlayingWidget />
-          <ThemeButton />
-        </div>
-      </header>
+      <Topbar back={toLibrary} title="Settings" />
       <main className="settings">
         <StorageSection />
         <Tools />

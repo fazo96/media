@@ -1,5 +1,7 @@
 # The pages
 
+Pieces they share: the top bar (`components/Topbar.tsx`: back or the wordmark, the page's title, [now playing](#now-playing)'s widget, the theme), a row of videos (`components/MediaRow.tsx`: a playlist's, the player's side lists, a share link's), notices (`components/Notice.tsx`), and renaming in place and confirming a delete (`components/InlineEdit.tsx`).
+
 ## The library (`/`, `components/Library.tsx`)
 
 Server-rendered with every video, playlist and the current downloads, then kept fresh in the browser. Back and Forward bring a page back as it was left without asking the server (Next's router cache, or the browser's back-forward cache), so the library and a playlist's page fetch their data again whenever they mount or show again (`pageshow`). The ways in:
@@ -65,7 +67,7 @@ The device fetches the file itself, so it must reach the server at the address t
 
 No session needed: the video (music: the browser's `<audio>` controls under its cover, and `og:audio` in its preview) with its title, details and **Download**, and nothing that leads into the library; watching doesn't count as a play or save a place. Its metadata gives chat apps a preview (`og:` title, still and video, from absolute URLs built from the forwarded host) and tells search engines to keep out (`noindex`). An expired or revoked link is a 404 saying so (`app/s/[token]/not-found.tsx`). The service worker doesn't keep these pages.
 
-A playlist link's page is `components/SharedPlaylist.tsx`: the playlist's videos in the library, as the playlist is now, beside the player, playing one after another (each from `/api/s/<token>/v/<id>/`, with its own Download; music in an `<audio>` under its cover). Picking one, or the next starting, puts it in the address (`?v=<id>`), so a reload stays there; the first one doesn't autoplay. The page gets only what it shows of each video (`SharedItem`), not how it was watched or where it came from. Its preview is the playlist's title and its first still.
+A playlist link's page is `components/SharedPlaylist.tsx`: the playlist's videos in the library, as the playlist is now, beside the player, playing one after another (each from `/api/s/<token>/v/<id>/`, with its own Download; music in an `<audio>` under its cover). Picking one, or the next starting, puts it in the address (`?v=<id>`), so a reload stays there; the first one doesn't autoplay. Both kinds of link show their video with `components/SharedStage.tsx`. The page gets only what it shows of each video (`SharedItem`, `sharedItem()` in `lib/shares.ts`), not how it was watched or where it came from. Its preview is the playlist's title and its first still.
 
 ## Settings (`/settings`)
 

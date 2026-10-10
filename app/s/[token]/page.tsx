@@ -1,12 +1,10 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { IconDownload, IconStill, IconWarn } from "@/components/icons";
-import Logo from "@/components/Logo";
-import SharedPlaylist, { type SharedItem } from "@/components/SharedPlaylist";
-import ThemeButton from "@/components/ThemeButton";
-import { formatDuration, formatHeight, formatSize } from "@/lib/format";
-import { getShare, sharedPlaylist, sharedVideo } from "@/lib/shares";
+import SharedPlaylist from "@/components/SharedPlaylist";
+import SharedStage from "@/components/SharedStage";
+import Topbar from "@/components/Topbar";
+import { getShare, sharedItem, sharedPlaylist, sharedVideo } from "@/lib/shares";
 import { isAudio, type Playlist, type Video } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -26,19 +24,6 @@ async function shared(token: string): Promise<Found | null> {
   const video = await sharedVideo(share);
   return video && { video };
 }
-
-/** Only what the page shows: a video's meta.json says more (how it was watched, where it came from). */
-const item = (v: Video): SharedItem => ({
-  id: v.id,
-  title: v.title,
-  channel: v.channel,
-  duration: v.duration,
-  height: v.height,
-  size: v.size,
-  hasThumb: v.hasThumb,
-  playable: v.playable,
-  videoCodec: v.videoCodec,
-});
 
 /** This server as the visitor reached it (behind nginx, from its forwarded headers): previews need absolute links. */
 async function origin() {
@@ -89,20 +74,6 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   };
 }
 
-function Header() {
-  return (
-    <header className="topbar">
-      <span className="wordmark">
-        <Logo />
-        <span>media</span>
-      </span>
-      <div className="topbar-right">
-        <ThemeButton />
-      </div>
-    </header>
-  );
-}
-
 export default async function Page({ params, searchParams }: Props) {
   const { token } = await params;
   const found = await shared(token);
@@ -112,48 +83,16 @@ export default async function Page({ params, searchParams }: Props) {
     const start = Math.max(0, found.videos.findIndex((v) => v.id === want));
     return (
       <div className="app app-player">
-        <Header />
-        <SharedPlaylist token={token} title={found.playlist.title} channel={found.playlist.channel} videos={found.videos.map(item)} start={start} />
+        <Topbar standalone />
+        <SharedPlaylist token={token} title={found.playlist.title} channel={found.playlist.channel} videos={found.videos.map(sharedItem)} start={start} />
       </div>
     );
   }
-  const { video: v } = found;
-  const file = `/api/s/${token}/file`;
-  const details = [v.duration ? formatDuration(v.duration) : null, formatHeight(v.height), formatSize(v.size)].filter(Boolean);
   return (
     <div className="app app-player">
-      <Header />
+      <Topbar standalone />
       <main className="watch watch-shared">
-        <section className="stage">
-          {isAudio(v) ? (
-            <>
-              <div className="screen is-listening">{v.hasThumb ? <img src={`/api/s/${token}/thumb`} alt="" /> : <IconStill audio />}</div>
-              {/* biome-ignore lint/a11y/useMediaCaption: music */}
-              <audio className="shared-audio" src={file} controls preload="metadata" />
-            </>
-          ) : (
-            <div className="screen">
-              {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
-              <video src={file} poster={v.hasThumb ? `/api/s/${token}/thumb` : undefined} controls playsInline preload="metadata" />
-            </div>
-          )}
-          {!v.playable && (
-            <p className="notice is-error" role="alert">
-              <IconWarn />
-              This is {v.videoCodec ?? "an unusual codec"}, which most browsers can’t play. Download it to watch it in a video player.
-            </p>
-          )}
-          <div className="watch-info">
-            <h1 className="watch-title">{v.title}</h1>
-            {v.channel && <p className="watch-meta">{v.channel}</p>}
-            <p className="watch-details">{details.join(" · ")}</p>
-            <div className="watch-actions">
-              <a className="btn" href={`${file}?download`} download>
-                <IconDownload /> Download
-              </a>
-            </div>
-          </div>
-        </section>
+        <SharedStage item={sharedItem(found.video)} base={`/api/s/${token}`} />
       </main>
     </div>
   );

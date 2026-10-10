@@ -3,8 +3,7 @@
 import { useState } from "react";
 import { api, ApiError } from "@/lib/api";
 import { IconLock } from "./icons";
-import Logo from "./Logo";
-import ThemeButton from "./ThemeButton";
+import Topbar from "./Topbar";
 
 export default function Unlock({ next }: { next: string }) {
   const [password, setPassword] = useState("");
@@ -32,16 +31,7 @@ export default function Unlock({ next }: { next: string }) {
 
   return (
     <div className="app">
-      <header className="topbar">
-        <span className="wordmark">
-          <Logo />
-          <span>media</span>
-        </span>
-        <span className="topbar-title">Locked</span>
-        <div className="topbar-right">
-          <ThemeButton />
-        </div>
-      </header>
+      <Topbar standalone title="Locked" />
 
       <main className="page">
         <section className="welcome">

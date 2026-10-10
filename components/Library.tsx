@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
@@ -22,14 +21,14 @@ import { isSort, SORTS, type Sort, sorted } from "@/lib/sort";
 import { type DiskUsage, isActive, type Job, type Playlist, type Video } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
 import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
-import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
+import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconUpload } from "./icons";
 import Logo from "./Logo";
+import Notice from "./Notice";
 import PlaylistCard from "./PlaylistCard";
 import PlaylistPreview, { type Preview } from "./PlaylistPreview";
 import SearchResults, { type Search } from "./SearchResults";
 import StorageMeter from "./StorageMeter";
-import NowPlayingWidget from "./NowPlayingWidget";
-import ThemeButton from "./ThemeButton";
+import Topbar from "./Topbar";
 import TransmissionPanel from "./TransmissionPanel";
 import VideoCard from "./VideoCard";
 
@@ -38,7 +37,7 @@ const SORT_KEY = "media:sort";
 /** What a file chooser or a drop takes when the browser gives no type: videos, and music. */
 const MEDIA_EXT = /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp|mp3|m4a|m4b|flac|ogg|oga|opus|wav|aac|wma)$/i;
 
-type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
+type News = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
 /** `transmission`: importing from Transmission is set up (MEDIA_TRANSMISSION_URL). */
 type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; storage: DiskUsage; transmission: boolean };
@@ -57,7 +56,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   const [preview, setPreview] = useState<Preview | null>(null);
   const [torrents, setTorrents] = useState(false);
   const [newList, setNewList] = useState<string | null>(null);
-  const [notice, setNotice] = useState<Notice | null>(null);
+  const [notice, setNotice] = useState<News | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -390,11 +389,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
 
   return (
     <div className="app">
-      <header className="topbar">
-        <Link href="/" className="wordmark" aria-label="media, the library">
-          <Logo />
-          <span>media</span>
-        </Link>
+      <Topbar settings right={<StorageMeter initial={storage} watch={`${videos.length}:${videos.reduce((sum, v) => sum + v.size, 0)}`} />}>
         <label className="search">
           <IconSearch />
           <input
@@ -405,15 +400,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
             aria-label="Search the library"
           />
         </label>
-        <div className="topbar-right">
-          <NowPlayingWidget />
-          <StorageMeter initial={storage} watch={`${videos.length}:${videos.reduce((sum, v) => sum + v.size, 0)}`} />
-          <ThemeButton />
-          <Link href="/settings" className="icon-btn" aria-label="Settings" title="Settings">
-            <IconSettings />
-          </Link>
-        </div>
-      </header>
+      </Topbar>
 
       <main className="library">
         <section className="add" aria-label="Add videos or music">
@@ -454,17 +441,14 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
         </section>
 
         {notice && (
-          <p className={`notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>
+          <Notice error={notice.error} onDismiss={() => setNotice(null)}>
             {notice.text}
             {notice.action && (
               <button type="button" className="link-btn" onClick={notice.action.run}>
                 {notice.action.label}
               </button>
             )}
-            <button type="button" className="notice-close" onClick={() => setNotice(null)} aria-label="Dismiss">
-              ×
-            </button>
-          </p>
+          </Notice>
         )}
 
         {torrents && <TransmissionPanel jobs={jobs} onJob={keepJob} onClose={() => setTorrents(false)} />}

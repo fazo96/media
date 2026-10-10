@@ -1,23 +1,10 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { formatDuration, formatHeight, formatSize } from "@/lib/format";
-import { isAudio } from "@/lib/types";
-import { IconDownload, IconStill, IconWarn } from "./icons";
+import type { SharedItem } from "@/lib/types";
+import MediaRow, { Still } from "./MediaRow";
+import SharedStage from "./SharedStage";
 import { useMediaSession } from "./useMediaSession";
-
-/** What a playlist link's page knows of a video: enough to play and list it, nothing about watching it here. */
-export type SharedItem = {
-  id: string;
-  title: string;
-  channel?: string;
-  duration: number;
-  height?: number;
-  size: number;
-  hasThumb: boolean;
-  playable: boolean;
-  videoCodec?: string;
-};
 
 type Props = { token: string; title: string; channel?: string; videos: SharedItem[]; start: number };
 
@@ -28,19 +15,14 @@ type Props = { token: string; title: string; channel?: string; videos: SharedIte
  */
 export default function SharedPlaylist({ token, title, channel, videos, start }: Props) {
   const [index, setIndex] = useState(start);
-  const [failed, setFailed] = useState(false);
   // A video, or for music an <audio>.
   const ref = useRef<HTMLMediaElement>(null);
-  const attach = (el: HTMLMediaElement | null) => {
-    ref.current = el;
-  };
   // Autoplay only once someone's watching: not on opening the link, but after an end or a pick.
   const playNext = useRef(false);
   const v = videos[index];
   const base = (o: SharedItem) => `/api/s/${token}/v/${o.id}`;
 
   useEffect(() => {
-    setFailed(false);
     if (playNext.current) void ref.current?.play().catch(() => {});
   }, [index]);
 
@@ -71,60 +53,9 @@ export default function SharedPlaylist({ token, title, channel, videos, start }:
     );
   }
 
-  const details = [v.duration ? formatDuration(v.duration) : null, formatHeight(v.height), formatSize(v.size)].filter(Boolean);
   return (
     <main className="watch">
-      <section className="stage">
-        {isAudio(v) ? (
-          <>
-            <div className="screen is-listening">{v.hasThumb ? <img src={`${base(v)}/thumb`} alt="" /> : <IconStill audio />}</div>
-            {/* biome-ignore lint/a11y/useMediaCaption: music */}
-            <audio
-              ref={attach}
-              key={v.id}
-              className="shared-audio"
-              src={`${base(v)}/file`}
-              controls
-              preload="metadata"
-              onError={() => setFailed(true)}
-              onEnded={() => index + 1 < videos.length && pick(index + 1)}
-            />
-          </>
-        ) : (
-          <div className="screen">
-            {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
-            <video
-              ref={attach}
-              key={v.id}
-              src={`${base(v)}/file`}
-              poster={v.hasThumb ? `${base(v)}/thumb` : undefined}
-              controls
-              playsInline
-              preload="metadata"
-              onError={() => setFailed(true)}
-              onEnded={() => index + 1 < videos.length && pick(index + 1)}
-            />
-          </div>
-        )}
-        {(failed || !v.playable) && (
-          <p className="notice is-error" role="alert">
-            <IconWarn />
-            {isAudio(v)
-              ? "This browser couldn’t play it. Download it to play it elsewhere."
-              : `This is ${v.videoCodec ?? "an unusual codec"}, which this browser can’t play. Download it to watch it in a video player.`}
-          </p>
-        )}
-        <div className="watch-info">
-          <h1 className="watch-title">{v.title}</h1>
-          {v.channel && <p className="watch-meta">{v.channel}</p>}
-          <p className="watch-details">{details.join(" · ")}</p>
-          <div className="watch-actions">
-            <a className="btn" href={`${base(v)}/file?download`} download>
-              <IconDownload /> Download
-            </a>
-          </div>
-        </div>
-      </section>
+      <SharedStage key={v.id} item={v} base={base(v)} mediaRef={ref} onEnded={() => index + 1 < videos.length && pick(index + 1)} />
 
       <aside className="others" aria-label="The playlist">
         <h2 className="label">
@@ -134,24 +65,15 @@ export default function SharedPlaylist({ token, title, channel, videos, start }:
         <ol>
           {videos.map((o, i) => (
             <li key={o.id}>
-              <a
+              <MediaRow
+                still={<Still video={o} src={`${base(o)}/thumb`} />}
+                duration={o.duration}
+                title={o.title}
+                meta={i === index ? "Playing" : (o.channel ?? "")}
                 href={`?v=${o.id}`}
-                className={`other ${i === index ? "is-current" : ""}`}
-                aria-current={i === index ? "true" : undefined}
-                onClick={(e) => {
-                  e.preventDefault();
-                  pick(i);
-                }}
-              >
-                <span className="other-thumb">
-                  {o.hasThumb ? <img src={`${base(o)}/thumb`} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
-                  {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
-                </span>
-                <span className="other-text">
-                  <span className="other-title">{o.title}</span>
-                  <span className="other-meta">{i === index ? "Playing" : (o.channel ?? "")}</span>
-                </span>
-              </a>
+                onPick={() => pick(i)}
+                current={i === index}
+              />
             </li>
           ))}
         </ol>

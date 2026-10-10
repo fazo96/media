@@ -4,15 +4,17 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
 import { ApiError, changePlaylist, deletePlaylist, errorMessage, getPlaylist, listJobs, listVideos, requestYoutube } from "@/lib/api";
-import { formatDuration, playlistCount, sourceLabel } from "@/lib/format";
+import { playlistCount, sourceLabel } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
 import { inLibrary, isActive, isAudio, type Job, type Playlist, type Video } from "@/lib/types";
 import { playerHref, thumbUrl } from "@/lib/urls";
 import { youtubeUrl } from "@/lib/youtube";
-import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconStill, IconTrash } from "./icons";
+import { IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash } from "./icons";
+import { Confirm, Rename } from "./InlineEdit";
+import MediaRow, { Still } from "./MediaRow";
+import Notice from "./Notice";
 import ShareButton from "./ShareLinks";
-import NowPlayingWidget from "./NowPlayingWidget";
-import ThemeButton from "./ThemeButton";
+import Topbar, { toLibrary } from "./Topbar";
 import YtThumb from "./YtThumb";
 
 type Props = { initialPlaylist: Playlist; initialVideos: Video[]; initialJobs: Job[] };
@@ -24,7 +26,6 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const [videos, setVideos] = useState(initialVideos);
   const [jobs, setJobs] = useState(initialJobs);
   const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
-  const [title, setTitle] = useState(p.title);
   const [error, setError] = useState<string | null>(null);
   const fail = (err: unknown) => setError(errorMessage(err));
 
@@ -76,15 +77,12 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     };
   }, [following]);
 
-  const rename = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const t = title.trim();
-    if (!t || t === p.title) return setMode("idle");
+  const rename = async (title: string) => {
     try {
-      setP(await changePlaylist(p.id, { title: t }));
-      setMode("idle");
+      setP(await changePlaylist(p.id, { title }));
     } catch (err) {
       fail(err);
+      throw err;
     }
   };
 
@@ -130,34 +128,14 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     }
   };
 
-  const playHref = (v: Video) => playerHref(v.id, p.id);
-
   return (
     <div className="app">
-      <header className="topbar">
-        <Link href="/" className="icon-btn" aria-label="Back to the library" title="Library">
-          <IconBack />
-        </Link>
-        <span className="topbar-title">{p.title}</span>
-        <div className="topbar-right">
-          <NowPlayingWidget />
-          <ThemeButton />
-        </div>
-      </header>
+      <Topbar back={toLibrary} title={p.title} />
 
       <main className="library playlist-page">
         <section className="playlist-head">
           {mode === "rename" ? (
-            <form onSubmit={rename} className="rename">
-              <input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                autoFocus
-                aria-label="Playlist name"
-                onKeyDown={(e) => e.key === "Escape" && setMode("idle")}
-                onBlur={rename}
-              />
-            </form>
+            <Rename initial={p.title} label="Playlist name" onSave={rename} onDone={() => setMode("idle")} />
           ) : (
             <h1 className="shelf-title">{p.title}</h1>
           )}
@@ -174,7 +152,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
           </p>
           <div className="playlist-actions">
             {present.length > 0 && (
-              <Link href={playHref(present[0])} className="btn btn-primary">
+              <Link href={playerHref(present[0].id, p.id)} className="btn btn-primary">
                 <IconPlay /> Play all
               </Link>
             )}
@@ -189,27 +167,12 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                 <IconHeadphones /> Listen
               </button>
             )}
-            <button
-              type="button"
-              className="btn"
-              onClick={() => {
-                setTitle(p.title);
-                setMode("rename");
-              }}
-            >
+            <button type="button" className="btn" onClick={() => setMode("rename")}>
               <IconEdit /> Rename
             </button>
             <ShareButton of={{ playlistId: p.id }} title={p.title} small={false} />
             {mode === "delete" ? (
-              <span className="confirm">
-                <span>Delete the playlist? Its videos stay in the library.</span>
-                <button type="button" className="btn btn-danger btn-small" onClick={destroy}>
-                  Delete
-                </button>
-                <button type="button" className="btn btn-quiet btn-small" onClick={() => setMode("idle")}>
-                  Keep
-                </button>
-              </span>
+              <Confirm question="Delete the playlist? Its videos stay in the library." onConfirm={destroy} onCancel={() => setMode("idle")} />
             ) : (
               <button type="button" className="btn btn-quiet" onClick={() => setMode("delete")}>
                 <IconTrash /> Delete
@@ -217,12 +180,9 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
             )}
           </div>
           {error && (
-            <p className="notice is-error" role="alert">
+            <Notice error onDismiss={() => setError(null)}>
               {error}
-              <button type="button" className="notice-close" onClick={() => setError(null)} aria-label="Dismiss">
-                ×
-              </button>
-            </p>
+            </Notice>
           )}
         </section>
 
@@ -245,32 +205,17 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                   : ytId
                     ? "Not downloaded"
                     : "Deleted from the library";
-              const thumb = (
-                <span className="other-thumb">
-                  {v ? v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} /> : ytId ? <YtThumb id={ytId} /> : <IconFilm />}
-                  {v && v.duration > 0 && <span className="duration">{formatDuration(v.duration)}</span>}
-                </span>
-              );
-              const text = (
-                <span className="other-text">
-                  <span className="other-title">{v?.title ?? job?.title ?? (ytId ? `YouTube · ${ytId}` : id)}</span>
-                  <span className={`other-meta ${job?.state === "failed" ? "is-error" : ""}`}>{status}</span>
-                </span>
-              );
               return (
                 <li key={id} className={`pl-item ${v ? "" : "is-missing"}`} data-item={id}>
                   <span className="pl-index">{i + 1}</span>
-                  {v ? (
-                    <Link href={playHref(v)} className="other">
-                      {thumb}
-                      {text}
-                    </Link>
-                  ) : (
-                    <span className="other">
-                      {thumb}
-                      {text}
-                    </span>
-                  )}
+                  <MediaRow
+                    still={v ? <Still video={v} src={thumbUrl(v)} /> : ytId ? <YtThumb id={ytId} /> : <IconFilm />}
+                    duration={v?.duration}
+                    title={v?.title ?? job?.title ?? (ytId ? `YouTube · ${ytId}` : id)}
+                    meta={status}
+                    error={job?.state === "failed"}
+                    href={v && playerHref(v.id, p.id)}
+                  />
                   <span className="pl-item-actions">
                     {!v && ytId && (!job || job.state === "failed") && (
                       <button type="button" className="icon-btn" onClick={() => download(ytId)} aria-label="Download it" title="Download it">

@@ -7,11 +7,12 @@ import { setListen } from "@/lib/api";
 import { formatAgo, formatDuration, formatHeight, formatSize, playsLabel, sourceLabel } from "@/lib/format";
 import { isAudio, type Video } from "@/lib/types";
 import { playerHref, thumbUrl } from "@/lib/urls";
-import { IconBack, IconCast, IconExternal, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconStill, IconWarn } from "./icons";
+import { IconCast, IconExternal, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconStill, IconWarn } from "./icons";
+import MediaRow, { Still } from "./MediaRow";
+import Notice from "./Notice";
 import { type NowPlaying, type Queue, useNowPlaying } from "./NowPlaying";
-import NowPlayingWidget from "./NowPlayingWidget";
 import ShareButton from "./ShareLinks";
-import ThemeButton from "./ThemeButton";
+import Topbar, { toLibrary } from "./Topbar";
 import { useCast } from "./useCast";
 import { useMediaSession } from "./useMediaSession";
 import { type Start, usePlayback } from "./usePlayback";
@@ -239,22 +240,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
 
   return (
     <div className="app app-player">
-      <header className="topbar">
-        {playlist ? (
-          <Link href={`/p/${playlist.id}`} className="icon-btn" aria-label="Back to the playlist" title={playlist.title}>
-            <IconBack />
-          </Link>
-        ) : (
-          <Link href="/" className="icon-btn" aria-label="Back to the library" title="Library">
-            <IconBack />
-          </Link>
-        )}
-        <span className="topbar-title">{v.title}</span>
-        <div className="topbar-right">
-          <NowPlayingWidget />
-          <ThemeButton />
-        </div>
-      </header>
+      <Topbar back={playlist ? { href: `/p/${playlist.id}`, label: "Back to the playlist", title: playlist.title } : toLibrary} title={v.title} />
 
       <main className="watch">
         <section className="stage">
@@ -281,7 +267,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
           )}
 
           {cast.device && (
-            <p className="notice" role="status">
+            <Notice>
               <IconCast />
               <span>
                 Playing on <strong>{cast.device}</strong>
@@ -294,17 +280,17 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               <button type="button" className="btn btn-quiet btn-small" onClick={cast.toggle}>
                 Stop casting
               </button>
-            </p>
+            </Notice>
           )}
           {cast.error && (
-            <p className="notice is-error" role="alert">
+            <Notice error>
               <IconWarn />
               {cast.error}
-            </p>
+            </Notice>
           )}
 
           {upNext !== null && next && (
-            <p className="notice up-next" role="status">
+            <Notice className="up-next">
               <IconNext />
               <span>
                 Up next in {upNext}s: <strong>{next.title}</strong>
@@ -315,11 +301,11 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               <button type="button" className="btn btn-quiet btn-small" onClick={() => setUpNext(null)}>
                 Cancel
               </button>
-            </p>
+            </Notice>
           )}
 
           {(lost || (!v.playable && !listen)) && (
-            <p className="notice is-error" role="alert">
+            <Notice error>
               <IconWarn />
               {lost && music
                 ? "This browser couldn’t play it. It’s still in the library: download it to play it elsewhere."
@@ -328,7 +314,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                 : failed
                 ? `This browser can’t play it (${v.videoCodec ?? "unknown codec"}). It’s still in the library; another browser, or a re-download, may do.`
                 : `This is ${v.videoCodec ?? "an unusual codec"}, which most browsers can’t play.`}
-            </p>
+            </Notice>
           )}
 
           <div className="watch-info">
@@ -374,10 +360,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               )}
             </div>
             {listenError && (
-              <p className="notice is-error" role="alert">
+              <Notice error>
                 <IconWarn />
                 {listenError}
-              </p>
+              </Notice>
             )}
             {pickedUp !== null && (
               <p className="resumed">
@@ -402,16 +388,14 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             <ol>
               {playlist.videos.map((o) => (
                 <li key={o.id}>
-                  <Link href={hrefOf(o)} className={`other ${o.id === v.id ? "is-current" : ""}`} aria-current={o.id === v.id ? "true" : undefined}>
-                    <span className="other-thumb">
-                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
-                      {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
-                    </span>
-                    <span className="other-text">
-                      <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{o.id === v.id ? "Playing" : sourceLabel(o)}</span>
-                    </span>
-                  </Link>
+                  <MediaRow
+                    still={<Still video={o} src={thumbUrl(o)} />}
+                    duration={o.duration}
+                    title={o.title}
+                    meta={o.id === v.id ? "Playing" : sourceLabel(o)}
+                    href={hrefOf(o)}
+                    current={o.id === v.id}
+                  />
                 </li>
               ))}
             </ol>
@@ -424,16 +408,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             <ul>
               {others.map((o) => (
                 <li key={o.id}>
-                  <Link href={playerHref(o.id)} className="other">
-                    <span className="other-thumb">
-                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
-                      {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
-                    </span>
-                    <span className="other-text">
-                      <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{sourceLabel(o)}</span>
-                    </span>
-                  </Link>
+                  <MediaRow still={<Still video={o} src={thumbUrl(o)} />} duration={o.duration} title={o.title} meta={sourceLabel(o)} href={playerHref(o.id)} />
                 </li>
               ))}
             </ul>

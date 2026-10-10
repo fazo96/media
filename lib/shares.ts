@@ -7,7 +7,7 @@ import { isValidId, isValidShareToken } from "./ids";
 import { getVideo } from "./library";
 import { SHARES_DIR } from "./paths";
 import { getPlaylist } from "./playlists";
-import type { Playlist, Share, ShareExpiry, ShareTarget, Video } from "./types";
+import type { Playlist, Share, SharedItem, ShareExpiry, ShareTarget, Video } from "./types";
 
 // Share links (docs/library.md#share-links): one JSON file each under shares/,
 // named by a random token. /s/<token> and /api/s/<token>/… play that one video,
@@ -119,3 +119,16 @@ export async function cleanShares(): Promise<void> {
     if (expired(s, now) || gone) await revokeShare(s.token);
   }
 }
+
+/** Only what a share link's page shows of a video: its meta.json says more (how it was watched, where it came from). */
+export const sharedItem = ({ id, title, channel, duration, height, size, hasThumb, playable, videoCodec }: Video): SharedItem => ({
+  id,
+  title,
+  channel,
+  duration,
+  height,
+  size,
+  hasThumb,
+  playable,
+  videoCodec,
+});

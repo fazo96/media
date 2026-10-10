@@ -2,9 +2,9 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { isAudio } from "@/lib/types";
 import { playerHref, thumbUrl } from "@/lib/urls";
-import { IconClose, IconNext, IconPause, IconPlay, IconStill } from "./icons";
+import { IconClose, IconNext, IconPause, IconPlay } from "./icons";
+import { Still } from "./MediaRow";
 import { useNowPlaying } from "./NowPlaying";
 
 /**
@@ -21,7 +21,7 @@ export default function NowPlayingWidget() {
   return (
     <section className="now-playing" aria-label="Now playing">
       <Link href={playerHref(track.id, queue?.id)} className="now-playing-track" title={queue ? `${track.title} · ${queue.title}` : track.title}>
-        <span className="now-playing-thumb">{track.hasThumb ? <img src={thumbUrl(track)} alt="" /> : <IconStill audio={isAudio(track)} />}</span>
+        <span className="now-playing-thumb"><Still video={track} src={thumbUrl(track)} lazy={false} /></span>
         <span className="now-playing-title">{track.title}</span>
       </Link>
       {now.playing ? (
