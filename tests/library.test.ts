@@ -52,6 +52,47 @@ test("an mkv with H.264 is remuxed to mp4", { skip: !ffmpeg }, async () => {
   await assert.rejects(stat(dir));
 });
 
+test("an mkv in two languages plays the one wanted, converted to AAC, and keeps the other", { skip: !ffmpeg }, async () => {
+  const dir = await incomingDir();
+  const mkv = path.join(dir, "film.mkv");
+  // English AAC first (and default), Italian AC-3 second, as the fixture's video.
+  execFileSync("ffmpeg", [
+    ...["-v", "error", "-i", FIXTURE, "-f", "lavfi", "-i", "sine=frequency=440:duration=30", "-f", "lavfi", "-i", "sine=frequency=880:duration=30"],
+    ...["-map", "0:v", "-map", "1:a", "-map", "2:a", "-c:v", "copy", "-c:a:0", "aac", "-c:a:1", "ac3"],
+    ...["-metadata:s:a:0", "language=eng", "-metadata:s:a:1", "language=ita", "-disposition:a:0", "default", "-disposition:a:1", "0", mkv],
+  ]);
+  process.env.MEDIA_AUDIO_LANGS = "it,en";
+  let converted = false;
+  try {
+    const v = await addVideo(
+      mkv,
+      { title: "Two Languages", source: "file", originalName: "film.mkv" },
+      {
+        onConvert: () => {
+          converted = true;
+        },
+      },
+    );
+    assert.ok(converted);
+    assert.equal(v.file, "video.mp4");
+    assert.equal(v.playable, true);
+    assert.equal(v.audioCodec, "aac");
+    assert.equal(v.audioLanguage, "ita");
+    const out = execFileSync("ffprobe", ["-v", "error", "-select_streams", "a", "-show_entries", "stream=codec_name:stream_tags=language:stream_disposition=default", "-of", "json", videoFile(v)]);
+    const streams = (JSON.parse(String(out)) as { streams: { codec_name: string; tags?: { language?: string }; disposition: { default: number } }[] }).streams;
+    assert.deepEqual(
+      streams.map((s) => [s.codec_name, s.tags?.language, s.disposition.default]),
+      [
+        ["aac", "ita", 1],
+        ["ac3", "ita", 0],
+        ["aac", "eng", 0],
+      ],
+    );
+  } finally {
+    delete process.env.MEDIA_AUDIO_LANGS;
+  }
+});
+
 test("a file that isn't a video is turned away", { skip: !ffmpeg }, async () => {
   const file = path.join(await incomingDir(), "notes.mp4");
   await (await import("node:fs/promises")).writeFile(file, "not a video");

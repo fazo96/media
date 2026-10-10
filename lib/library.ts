@@ -6,7 +6,7 @@ import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
-import { MIME, plan, probe, remux, thumbnail } from "./probe";
+import { audioLanguages, MIME, plan, probe, remux, thumbnail } from "./probe";
 import type { Video } from "./types";
 
 // The library on disk (docs/library.md): one folder per video under
@@ -98,25 +98,29 @@ export class NotAVideo extends Error {}
 type Details = Pick<Video, "title" | "source" | "originalName" | "youtubeId" | "url" | "channel" | "torrentHash" | "torrentName">;
 
 /**
- * Bring a file from INCOMING_DIR into the library: probe it, remux it if only
- * its container keeps it from playing, take a thumbnail (unless `thumb` brings
- * one), and write its meta.json. `id` forces the id (YouTube's), replacing
- * what's there. The incoming file is moved or removed either way.
+ * Bring a file from INCOMING_DIR into the library: probe it, remux it if its
+ * container or its audio keeps it from playing (the language wanted first,
+ * converted to AAC if need be; `onConvert` is told before that), take a
+ * thumbnail (unless `thumb` brings one), and write its meta.json. `id` forces
+ * the id (YouTube's), replacing what's there. The incoming file is moved or
+ * removed either way.
  */
 export async function addVideo(
   file: string,
   details: Details,
-  { id: wantId, thumb }: { id?: string; thumb?: string } = {},
+  { id: wantId, thumb, signal, onConvert }: { id?: string; thumb?: string; signal?: AbortSignal; onConvert?: () => void } = {},
 ): Promise<Video> {
   const ext = path.extname(details.originalName ?? file).slice(1).toLowerCase();
   const info = await probe(file).catch(() => null);
   if (!info?.videoCodec) throw new NotAVideo("That file has no video in it that ffmpeg can read.");
-  const how = plan(info, ext);
+  const how = plan(info, ext, audioLanguages());
+  const track = info.audio[how.audio];
 
   let source = file;
   if (how.remux && how.container) {
     source = `${file}.remux.${how.container}`;
-    await remux(file, source, how.container);
+    if (how.convert) onConvert?.();
+    await remux(file, source, how, info, signal);
   }
   const fileExt = how.container ?? (ext || "bin");
   const name = `video.${fileExt}`;
@@ -141,7 +145,8 @@ export async function addVideo(
     width: info.width,
     height: info.height,
     videoCodec: info.videoCodec,
-    audioCodec: info.audioCodec,
+    audioCodec: how.convert ? "aac" : track?.codec,
+    ...(track?.language ? { audioLanguage: track.language } : {}),
     playable: how.playable,
     hasThumb,
     addedAt: Date.now(),

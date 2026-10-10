@@ -311,10 +311,21 @@ async function run(job: Job) {
         const got = (await stat(file)).size;
         if (got !== f.length) throw new Error(`“${short}” copied ${got} of ${f.length} bytes.`);
         job.state = "processing";
-        const v = await addVideo(file, { title: titleOf(f.name), source: "torrent", originalName: f.name, torrentHash: imp.hash, torrentName: t.name });
+        const v = await addVideo(
+          file,
+          { title: titleOf(f.name), source: "torrent", originalName: f.name, torrentHash: imp.hash, torrentName: t.name },
+          {
+            signal,
+            onConvert: () => {
+              job.converting = true;
+            },
+          },
+        );
+        job.converting = false;
         job.videoId ??= v.id;
         await addToPlaylist(v.id);
       } catch (err) {
+        job.converting = false;
         await rm(dir, { recursive: true, force: true });
         if (signal.aborted) throw err;
         throw new Error(imp.files.length > 1 ? `${short}: ${(err as Error).message}` : (err as Error).message);

@@ -33,7 +33,7 @@ For each file, in the order asked:
 
 Only when every file is in (and the job wasn't cancelled) does `remove` call `torrent-remove`. A failure or a cancel leaves the torrent and its files where they were.
 
-It's a copy, not a move or a link, so nothing is lost if something goes wrong before Transmission deletes its own; the library and the downloads can be on different disks.
+It's a copy, not a move or a link, so nothing is lost if something goes wrong before Transmission deletes its own; the library and the downloads can be on different disks. Once it has, the library's file is all there is: a remuxed one keeps every audio track its mp4 can hold, but not DTS or TrueHD ones (their AAC copy only, when chosen) nor subtitles ([library](library.md#adding-a-video)).
 
 ## The page
 

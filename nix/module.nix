@@ -56,6 +56,7 @@ in
       default = { };
       example = {
         MEDIA_MAX_HEIGHT = "720";
+        MEDIA_AUDIO_LANGS = "ita,eng";
       };
       description = "Extra environment variables.";
     };

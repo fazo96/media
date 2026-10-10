@@ -27,6 +27,8 @@ For the user's reference:
 
 `nix build` checks the package builds; run `result/bin/media -p 3301` with a scratch `MEDIA_DIR` to try it. yt-dlp is as new as the nixpkgs in the dotfiles' lock: update that (`nix flake update nixpkgs`) when downloads break.
 
+`MEDIA_AUDIO_LANGS` (e.g. `ita,eng`, in `services.media.environment`) is the audio language wanted, best first, for files with several ([library](library.md#adding-a-video)).
+
 Importing from Transmission is off until `services.media.environment` sets `MEDIA_TRANSMISSION_URL` (and `MEDIA_TRANSMISSION_PATHS` for a Transmission in a container; [transmission](transmission.md#setting-it-up)). On the server: `http://127.0.0.1:8004/transmission/rpc` and `/downloads=/mnt/BigStorage/Files/Downloads`. The service only reads the downloads (`ProtectSystem=strict` leaves them readable); Transmission deletes its own. To try it, a scratch library may read the real Transmission's list and copy from it, but leave the delete box unticked: removing a torrent is for the user to do.
 
 ## The tools

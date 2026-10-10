@@ -25,7 +25,9 @@ export type Video = {
   width?: number;
   height?: number;
   videoCodec?: string;
+  /** The audio track that plays (of several, the language wanted: docs/library.md#adding-a-video). */
   audioCodec?: string;
+  audioLanguage?: string;
   /** False when a browser probably can't play it (HEVC in most, say). */
   playable: boolean;
   hasThumb: boolean;
@@ -57,6 +59,8 @@ export type Job = {
   speed?: number;
   eta?: number;
   error?: string;
+  /** state "processing": its audio is being converted to AAC (a torrent's). */
+  converting?: boolean;
   /** The video, once done (a torrent's first). */
   videoId?: string;
   /** The playlist it was queued for, when a whole one was. */
