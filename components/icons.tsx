@@ -171,3 +171,11 @@ export const IconDisk = (p: P) => (
     <circle cx="13.5" cy="13" r="0.6" fill="currentColor" />
   </svg>
 );
+
+export const IconHeadphones = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3.5 13v-2.5a6.5 6.5 0 0 1 13 0V13" />
+    <rect x="3.5" y="11.5" width="3" height="5" rx="1" />
+    <rect x="13.5" y="11.5" width="3" height="5" rx="1" />
+  </svg>
+);

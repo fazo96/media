@@ -5,9 +5,11 @@ Everything lives under `MEDIA_DIR` (default `./data`, `lib/paths.ts`):
 ```
 videos/<id>/video.mp4   the video (or .webm, or the original extension when it can't play)
             meta.json   the Video (lib/types.ts): title, source, codecs, duration, size,
-                        addedAt, lastPlayedAt, playCount, position (seconds, 0 when finished);
+                        addedAt, lastPlayedAt, playCount, position (seconds, 0 when finished),
+                        listen (listen mode, when on);
                         from a torrent, its hash, name and path in it (docs/transmission.md)
             thumb.jpg   640px still (from yt-dlp for YouTube, else ffmpeg at 10% in, max 10s)
+            audio.m4a   listen mode's file: the audio track alone (audio.webm for Vorbis), made on first asking
 playlists/<id>.json     a Playlist (lib/types.ts): title, items (video ids, in order), and
                         for one downloaded from YouTube its list id, link and channel
 shares/<token>.json     a share link (lib/types.ts Share): its video or playlist, when made, when it expires (null: never)
@@ -35,6 +37,12 @@ An id names a folder, so `isValidId` (`lib/ids.ts`: `[a-z0-9][a-z0-9_-]{0,79}`) 
 5. Stage the folder beside the incoming file, then rename it into `videos/` in one step (onto the empty claimed folder, or, for a forced id, after trashing the old one, keeping its `addedAt`, `playCount`, `lastPlayedAt` and `position`).
 
 `updateVideo()` serializes writes to one `meta.json` (a progress save and a rename can land together); each write is atomic (`lib/files.ts`).
+
+## Listen mode
+
+Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api/videos/<id> { listen }`, or a playlist's `{ listen }`, which sets it on every video in it then; a playlist keeps no setting of its own) has the player play its audio alone, which a phone keeps playing with the screen off: Chrome on Android pauses a background `<video>` with a picture, never one without ([pages](pages.md#listen-mode)). Off leaves no field behind (`withListen()`). A forced re-download keeps it, as it keeps the watching.
+
+`audioFile()` (`lib/library.ts`, served by `GET /api/videos/<id>/audio`) makes the file the first time it's asked for, beside the video, and keeps it (remade when the video file is newer): the track the video plays (in a playable file, the default one, which [adding](#adding-a-video) made the language wanted; otherwise `pickAudio()`'s), copied (`extractAudio()` in `lib/probe.ts`, seconds) into mp4 as `audio.m4a`, or webm as `audio.webm` for Vorbis, or converted to AAC when a browser can't play it (AC-3, DTS…; about a minute for a film). Two requests at once wait for the same ffmpeg; it writes to a temporary name and renames. A video without audio has none (404). The file goes to the trash with its folder, and isn't counted in the [disk usage](#disk-usage)'s `library` (that sums the videos' `size`).
 
 ## Playlists
 

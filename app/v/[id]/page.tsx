@@ -1,13 +1,21 @@
+import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import Player from "@/components/Player";
 import { isValidId } from "@/lib/ids";
 import { getVideo, listVideos } from "@/lib/library";
 import { getPlaylist } from "@/lib/playlists";
-import { requirePageSession } from "@/lib/session";
+import { hasSession, requirePageSession } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
 type Props = { params: Promise<{ id: string }>; searchParams: Promise<{ list?: string | string[] }> };
+
+/** Named for the video: the tab, the task switcher and, before the player says more, the media notification. */
+export async function generateMetadata({ params }: Props): Promise<Metadata> {
+  const { id } = await params;
+  const video = isValidId(id) && (await hasSession()) ? await getVideo(id) : null;
+  return video ? { title: video.title } : {};
+}
 
 export default async function Page({ params, searchParams }: Props) {
   const { id } = await params;

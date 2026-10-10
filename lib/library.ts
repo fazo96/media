@@ -6,7 +6,7 @@ import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
-import { audioLanguages, MIME, plan, probe, remux, thumbnail } from "./probe";
+import { audioContainer, audioLanguages, extractAudio, MIME, pickAudio, plan, playedAsIs, probe, remux, thumbnail } from "./probe";
 import type { Video } from "./types";
 
 // The library on disk (docs/library.md): one folder per video under
@@ -53,6 +53,13 @@ export function updateVideo(id: string, change: (v: Video) => Video): Promise<Vi
     if (next.title !== v.title) refreshBrowse(); // not for every progress save
     return next;
   });
+}
+
+/** `v` with listen mode on or off (off leaves no field behind); as it is when `listen` is undefined. */
+export function withListen(v: Video, listen: boolean | undefined): Video {
+  if (listen === undefined) return v;
+  const { listen: _, ...rest } = v;
+  return listen ? { ...rest, listen: true } : rest;
 }
 
 /** Move a video to the trash (a folder named for it and when). False when it's gone already. */
@@ -160,7 +167,13 @@ export async function addVideo(
     const old = await readMeta(id);
     if (old) {
       // A re-download keeps what was learned about watching it.
-      Object.assign(meta, { addedAt: old.addedAt, playCount: old.playCount, lastPlayedAt: old.lastPlayedAt, position: old.position });
+      Object.assign(meta, {
+        addedAt: old.addedAt,
+        playCount: old.playCount,
+        lastPlayedAt: old.lastPlayedAt,
+        position: old.position,
+        ...(old.listen ? { listen: true } : {}),
+      });
       await trashVideo(id);
     }
     await mkdir(VIDEOS_DIR, { recursive: true });
@@ -178,3 +191,45 @@ export async function addVideo(
 /** The video file's path on disk. */
 export const videoFile = (v: Video) => path.join(videoDir(v.id), v.file);
 export const thumbFile = (id: string) => path.join(videoDir(id), THUMB);
+
+/** Extractions under way, by video id: two requests for one file wait for the same ffmpeg. */
+const extracting = new Map<string, Promise<string | null>>();
+
+/**
+ * Listen mode's file: the video's audio track alone (`audio.m4a`, or
+ * `audio.webm` for Vorbis) beside it, made on first asking and kept, remade
+ * when the video file is newer. The track is the one the video plays. Null
+ * when it has no audio.
+ */
+export function audioFile(v: Video): Promise<string | null> {
+  const container = audioContainer(v.audioCodec);
+  const file = path.join(videoDir(v.id), container === "webm" ? "audio.webm" : "audio.m4a");
+  const ready = async () => {
+    const [audio, video] = await Promise.all([stat(file).catch(() => null), stat(videoFile(v))]);
+    return audio && audio.mtimeMs >= video.mtimeMs;
+  };
+  const make = async () => {
+    if (await ready()) return file;
+    const info = await probe(videoFile(v));
+    if (info.audio.length === 0) return null;
+    // A playable file was arranged so that the track wanted is the one a browser picks.
+    const index = v.playable ? playedAsIs(info.audio) : pickAudio(info.audio, audioLanguages());
+    const tmp = `${file}.${randomBytes(4).toString("hex")}.tmp`;
+    try {
+      await extractAudio(videoFile(v), tmp, index, info.audio[index], container);
+      await rename(tmp, file);
+    } finally {
+      await rm(tmp, { force: true });
+    }
+    return file;
+  };
+  let job = extracting.get(v.id);
+  if (!job) {
+    job = make().finally(() => extracting.delete(v.id));
+    extracting.set(v.id, job);
+  }
+  return job;
+}
+
+/** The MIME type of listen mode's file. */
+export const audioMime = (v: Video) => (audioContainer(v.audioCodec) === "webm" ? "audio/webm" : "audio/mp4");

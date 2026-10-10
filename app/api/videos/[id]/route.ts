@@ -1,4 +1,4 @@
-import { getVideo, trashVideo, updateVideo } from "@/lib/library";
+import { getVideo, trashVideo, updateVideo, withListen } from "@/lib/library";
 import { badRequest, noContent, noStore, notFound, readJson, route } from "@/lib/route";
 
 export const dynamic = "force-dynamic";
@@ -10,12 +10,15 @@ export const GET = route<P>(async (_req, { id }) => {
   return v ? noStore(v) : notFound();
 });
 
-/** Rename: `{ title }`. The id (and so its link) stays. */
+/** Rename, or turn listen mode on or off: `{ title?, listen? }`. A rename keeps the id (and so its link). */
 export const PATCH = route<P>(async (req, { id }) => {
-  const body = (await readJson(req)) as { title?: unknown } | undefined;
-  const title = typeof body?.title === "string" ? body.title.trim().slice(0, 300) : "";
-  if (!title) return badRequest("title required");
-  const v = await updateVideo(id, (v) => ({ ...v, title }));
+  const body = (await readJson(req)) as { title?: unknown; listen?: unknown } | undefined;
+  const title = typeof body?.title === "string" ? body.title.trim().slice(0, 300) : undefined;
+  const listen = body?.listen;
+  if (title === "" || (listen !== undefined && typeof listen !== "boolean") || (title === undefined && listen === undefined)) {
+    return badRequest("expected { title?, listen?: boolean }");
+  }
+  const v = await updateVideo(id, (v) => withListen({ ...v, title: title ?? v.title }, listen));
   return v ? noStore(v) : notFound();
 });
 

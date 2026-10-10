@@ -58,6 +58,12 @@
   font-size: 13px;
 }
 
+/* A toggle that's on (aria-pressed): Listen, Cast. */
+.btn.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .icon-btn {
   display: inline-grid;
   place-items: center;

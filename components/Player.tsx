@@ -3,13 +3,14 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { saveProgress } from "@/lib/api";
+import { saveProgress, setListen } from "@/lib/api";
 import { formatAgo, formatDuration, formatHeight, formatSize } from "@/lib/format";
 import type { Video } from "@/lib/types";
-import { IconBack, IconCast, IconExternal, IconFilm, IconNext, IconWarn } from "./icons";
+import { IconBack, IconCast, IconExternal, IconFilm, IconHeadphones, IconNext, IconWarn } from "./icons";
 import ShareButton from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
 import { useCast } from "./useCast";
+import { useMediaSession } from "./useMediaSession";
 import { thumbUrl } from "./VideoCard";
 
 /** How often, while playing, where it is goes to the server. */
@@ -34,6 +35,14 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   const started = useRef(false);
   // While it plays on a TV (useCast), which keeps the server told where it is instead.
   const casting = useRef(false);
+  // Listen mode (docs/pages.md#listen-mode): the same element plays the audio alone, which a phone keeps playing with the screen off.
+  const [listen, setListenState] = useState(!!v.listen);
+  const [listenError, setListenError] = useState<string | null>(null);
+  const listening = useRef(listen);
+  listening.current = listen;
+  // Switching between the two: where it was and whether it played, for when the other source loads (null: not switching).
+  const carry = useRef<{ time: number; playing: boolean } | null>(null);
+  const src = listen ? `/api/videos/${v.id}/audio` : `/api/videos/${v.id}/file`;
 
   // In a playlist: the ones either side, and the seconds left before the next one plays (null: not counting).
   const index = playlist ? playlist.videos.findIndex((o) => o.id === v.id) : -1;
@@ -64,12 +73,20 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     let lastSent = -1;
     const save = (beacon = false) => {
       const position = el.currentTime;
-      if (!started.current || casting.current || Math.abs(position - lastSent) < 0.05) return;
+      // Mid-switch the element is between sources, at 0: nothing to tell.
+      if (!started.current || casting.current || carry.current || Math.abs(position - lastSent) < 0.05) return;
       lastSent = position;
       lastSave = Date.now();
       void saveProgress(v.id, { position }, beacon);
     };
     const onMeta = () => {
+      const was = carry.current;
+      if (was) {
+        el.currentTime = was.time;
+        if (!was.playing) el.pause(); // autoplay applies to every new source
+        carry.current = null;
+        return;
+      }
       const d = el.duration || v.duration;
       if (v.position > RESUME_MARGIN_S && v.position < d - RESUME_MARGIN_S) {
         el.currentTime = v.position;
@@ -91,7 +108,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     const onEnded = () => {
       lastSent = 0;
       void saveProgress(v.id, { position: 0, ended: true });
-      if (nav.current.next) setUpNext(UP_NEXT_S);
+      if (!nav.current.next) return;
+      // Listening, or with the screen off, nobody's there to read a countdown: straight on.
+      if (listening.current || document.visibilityState === "hidden") router.push(nav.current.next);
+      else setUpNext(UP_NEXT_S);
     };
     const onHide = () => document.visibilityState === "hidden" && save(true);
     const onLeave = () => save(true);
@@ -117,7 +137,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
       document.removeEventListener("visibilitychange", onHide);
       window.removeEventListener("pagehide", onLeave);
     };
-  }, [v.id]);
+  }, [v.id, router]);
 
   // The keys YouTube taught everyone, wherever focus is (but in a text field).
   useEffect(() => {
@@ -167,6 +187,31 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     void el.play();
   };
 
+  /** Listen mode on or off, for this video on every device: playing on from the same place with the other source. */
+  const toggleListen = async () => {
+    const el = ref.current;
+    const on = !listen;
+    setListenError(null);
+    if (el && el.readyState >= 1 && !carry.current) carry.current = { time: el.currentTime, playing: !el.paused };
+    setFailed(false);
+    setListenState(on);
+    try {
+      await setListen(v.id, on);
+    } catch {
+      setListenError(on ? "Couldn’t save listen mode: it’s on here, for now." : "Couldn’t save that: listen mode is off here, for now.");
+    }
+  };
+
+  useMediaSession(ref, {
+    src,
+    title: v.title,
+    artist: v.channel,
+    album: playlist?.title,
+    artwork: v.hasThumb ? thumbUrl(v) : undefined,
+    onPrevious: prev ? () => router.push(nav.current.prev) : undefined,
+    onNext: next ? () => router.push(nav.current.next) : undefined,
+  });
+
   const details = [
     v.duration ? formatDuration(v.duration) : null,
     formatHeight(v.height),
@@ -198,13 +243,16 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
             <video
               ref={ref}
-              src={`/api/videos/${v.id}/file`}
+              src={src}
               poster={v.hasThumb ? thumbUrl(v) : undefined}
               controls
               autoPlay
               playsInline
               preload="metadata"
-              onError={() => setFailed(true)}
+              onError={() => {
+                carry.current = null;
+                setFailed(true);
+              }}
             />
           </div>
 
@@ -241,10 +289,12 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             </p>
           )}
 
-          {(failed || !v.playable) && (
+          {(failed || (!v.playable && !listen)) && (
             <p className="notice is-error" role="alert">
               <IconWarn />
-              {failed
+              {failed && listen
+                ? "Its audio couldn’t be played: it may have none, or the server couldn’t take it out. Turn listen mode off to play the video."
+                : failed
                 ? `This browser can’t play it (${v.videoCodec ?? "unknown codec"}). It’s still in the library; another browser, or a re-download, may do.`
                 : `This is ${v.videoCodec ?? "an unusual codec"}, which most browsers can’t play.`}
             </p>
@@ -273,12 +323,27 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             </p>
             <div className="watch-actions">
               <ShareButton of={{ videoId: v.id }} title={v.title} />
+              <button
+                type="button"
+                className={`btn btn-small ${listen ? "is-on" : ""}`}
+                onClick={toggleListen}
+                aria-pressed={listen}
+                title="Play its audio alone, which keeps playing with the screen off"
+              >
+                <IconHeadphones /> Listen
+              </button>
               {cast.available && (
                 <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
                   <IconCast /> {cast.device ? "Casting" : "Cast"}
                 </button>
               )}
             </div>
+            {listenError && (
+              <p className="notice is-error" role="alert">
+                <IconWarn />
+                {listenError}
+              </p>
+            )}
             {resumed !== null && (
               <p className="resumed">
                 Picked up at {formatDuration(resumed)}.{" "}

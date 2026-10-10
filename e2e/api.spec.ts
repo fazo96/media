@@ -171,3 +171,40 @@ test("a playlist is made, renamed, given videos and trimmed", async ({ request }
   expect((await request.delete(path)).status()).toBe(404);
   await request.delete(`/api/videos/${v.id}`);
 });
+
+test("listen mode: set on a video or a whole playlist, and its audio served alone", async ({ request }) => {
+  const a = await upload(request, `${unique("Song")}.mp4`);
+  const b = await upload(request, `${unique("Song")}.mp4`);
+
+  const audio = await request.get(`/api/videos/${a.id}/audio`);
+  expect(audio.status()).toBe(200);
+  expect(audio.headers()["content-type"]).toBe("audio/mp4");
+  const whole = (await audio.body()).length;
+  expect(whole).toBeGreaterThan(1000);
+  expect(whole).toBeLessThan(a.size);
+  const part = await request.get(`/api/videos/${a.id}/audio`, { headers: { Range: "bytes=0-99" } });
+  expect(part.status()).toBe(206);
+  expect(part.headers()["content-range"]).toBe(`bytes 0-99/${whole}`);
+  expect((await request.get("/api/videos/no-such-video/audio")).status()).toBe(404);
+
+  const video = `/api/videos/${a.id}`;
+  expect((await (await request.patch(video, { data: { listen: true } })).json()).listen).toBe(true);
+  expect((await (await request.get(video)).json()).listen).toBe(true);
+  expect((await (await request.patch(video, { data: { listen: false } })).json()).listen).toBeUndefined();
+  expect((await request.patch(video, { data: { listen: "yes" } })).status()).toBe(400);
+  expect((await request.patch(video, { data: {} })).status()).toBe(400);
+
+  // A playlist's sets it on every video in it, and keeps no setting of its own.
+  const { playlist } = (await (await request.post("/api/playlists", { data: { title: unique("Album") } })).json()) as { playlist: Playlist };
+  const path = `/api/playlists/${playlist.id}`;
+  const p = (await (await request.patch(path, { data: { add: [a.id, b.id], listen: true } })).json()) as Playlist;
+  expect(p.items).toEqual([a.id, b.id]);
+  expect("listen" in p).toBe(false);
+  for (const v of [a, b]) expect((await (await request.get(`/api/videos/${v.id}`)).json()).listen).toBe(true);
+  await request.patch(path, { data: { listen: false } });
+  for (const v of [a, b]) expect((await (await request.get(`/api/videos/${v.id}`)).json()).listen).toBeUndefined();
+  expect((await request.patch(path, { data: { listen: 1 } })).status()).toBe(400);
+
+  await request.delete(path);
+  for (const v of [a, b]) await request.delete(`/api/videos/${v.id}`);
+});

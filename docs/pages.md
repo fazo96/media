@@ -19,15 +19,27 @@ Sorting (recently watched, most watched, recently added, A–Z) is remembered pe
 
 ## A playlist (`/p/<id>`, `components/PlaylistView.tsx`)
 
-Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay). Videos not in the library show greyed: downloading (followed every 2 seconds), not downloaded (a YouTube one, with a retry and a link), or deleted.
+Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. **Listen** turns [listen mode](#listen-mode) on for all its videos (or, when they all have it, off): it's theirs, so it holds wherever they play. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay). Videos not in the library show greyed: downloading (followed every 2 seconds), not downloaded (a YouTube one, with a retry and a link), or deleted.
 
 ## The player (`/v/<id>`, `components/Player.tsx`)
 
 A native `<video>` streaming `/api/videos/<id>/file`. It resumes from `position` unless that's within 5 seconds of either end, saying so with a "Start over". It counts a play the first time playback starts on the page (a ref, so StrictMode's double effects don't count twice; and checked on mount, since autoplay can start before hydration). The position is saved every 5 seconds while playing, on pause, and as a beacon when the page is hidden or left; the end resets it. Keys: Space/K, J/L (±10 s), ←/→ (±5 s), F, M. Videos marked not playable, or that fail to load, show why. Beside it: the 12 most recently watched others.
 
-Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too). Shift+N and Shift+P go to the next and previous.
+Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too); in listen mode, or with the page hidden, the next one plays at once, since nobody's there to read it. Shift+N and Shift+P go to the next and previous.
 
-Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](library.md#share-links) for the video (a playlist's page has the same button, for the playlist), lasting 1 day, 1 week (the default), 1 month or until revoked, and lists the video's links: copy, send (the system share sheet, where there is one) and revoke. **Cast** is there when a Cast device is (see Casting, below).
+The tab, and the media notification, are named for the video (`generateMetadata`; the playlist page's for the playlist).
+
+Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](library.md#share-links) for the video (a playlist's page has the same button, for the playlist), lasting 1 day, 1 week (the default), 1 month or until revoked, and lists the video's links: copy, send (the system share sheet, where there is one) and revoke. **Cast** is there when a Cast device is (see Casting, below). **Listen** is listen mode (below).
+
+## Listen mode
+
+For music: the same `<video>` plays `/api/videos/<id>/audio` instead of the file, the still as its poster ([library](library.md#listen-mode)). Chrome on Android pauses a `<video>` with a picture when the page goes to the background or the screen goes off; one with sound alone plays on, to Bluetooth too. **Listen** under the details turns it on or off for the video (`PATCH /api/videos/<id> { listen }`, so every device has it), switching sources where it was, playing or paused as it was (a `carry` ref, which also keeps the position saves quiet while the element is between sources). The first time, the server makes the audio file, so it can take a few seconds to start. Casting still sends the video. A share link always plays the video.
+
+There's no hand-off: switching to the audio alone when the page is hidden comes too late, as Chrome pauses first. No automated test can turn a phone's screen off: what's tested is that the source is audio alone (`videoWidth` 0).
+
+## The media notification
+
+`components/useMediaSession.ts`, in the player and a playlist link's page: the Media Session API's metadata (title, the channel, the playlist as album, the still), so the phone's notification, lock screen and Bluetooth devices show what plays (without it, Chrome shows the page's title). Its buttons play, pause, seek ±10 s, and scrub (`setPositionState`, on play, pause, seek and rate changes; the browser carries it between), and in a playlist go to the previous and next one.
 
 ## Casting
 

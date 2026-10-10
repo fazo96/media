@@ -36,6 +36,8 @@ export type Video = {
   playCount: number;
   /** Where playback stopped, in seconds; 0 at the start or once finished. */
   position: number;
+  /** Listen mode: it's music, so the player plays its audio alone (docs/library.md#listen-mode). */
+  listen?: boolean;
 };
 
 export type JobState = "queued" | "downloading" | "processing" | "done" | "failed";

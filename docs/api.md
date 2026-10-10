@@ -4,8 +4,9 @@
 | --- | --- |
 | `GET /api/videos` | Every video |
 | `POST /api/upload` | A file: the raw body, its name in `X-Filename` (URI-encoded). 201 with the video; 415 when it isn't one |
-| `GET/PATCH/DELETE /api/videos/<id>` | One video; rename `{ title }`; move to the trash |
+| `GET/PATCH/DELETE /api/videos/<id>` | One video; `{ title?, listen? }`: rename, turn [listen mode](library.md#listen-mode) on or off; move to the trash |
 | `GET/HEAD /api/videos/<id>/file` | The video, with `Range` support (206, 416; `lib/range.ts`) |
+| `GET/HEAD /api/videos/<id>/audio` | Its audio alone, for [listen mode](library.md#listen-mode) (`audio/mp4`, or `audio/webm` for Vorbis): made on the first request, which waits for it (seconds; a minute to convert), then as `file`. 404 when it has no audio |
 | `GET /api/videos/<id>/thumb` | The still (the page adds `?v=<addedAt>` so a re-download's isn't hidden by the cache) |
 | `POST /api/videos/<id>/progress` | `{ position, started?, ended? }`: `started` counts a play, `ended` resets the position. Read as text, so `sendBeacon` works |
 | `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) and imports from Transmission ([transmission](transmission.md)): listed, cancelled and dismissed alike |
@@ -13,7 +14,7 @@
 | `GET /api/search?q=…` | Search YouTube ([downloads](downloads.md#searching)): `{ videos, playlists }`, up to 20 videos and 6 playlists; 400 for an empty or over-200-character query, 502 with yt-dlp's error, 504 after 60s |
 | `GET /api/youtube/playlist?list=…` | A YouTube playlist read whole ([downloads](downloads.md#playlists)), `YoutubePlaylist`, with `playlistId` when it was downloaded before; nothing is downloaded. 400 when `list` isn't a playlist link or id, 502, 504 |
 | `GET/POST /api/playlists` | Every playlist, newest first; make one: `{ title }` (201 `{ playlist }`), or `{ youtube: <link or id> }` to download a whole YouTube playlist (201 `{ playlist, jobs }`; 502, 504 as above) |
-| `GET/PATCH/DELETE /api/playlists/<id>` | One playlist; `{ title?, add?, remove? }` (video ids: `add` must be in the library, and goes at the end); to the trash, its videos staying |
+| `GET/PATCH/DELETE /api/playlists/<id>` | One playlist; `{ title?, add?, remove?, listen? }` (video ids: `add` must be in the library, and goes at the end; `listen` sets listen mode on every video in it, after those); to the trash, its videos staying |
 | `GET/POST /api/shares` | Share links still good, newest first, with their videos' or playlists' titles (`?video=<id>` or `?playlist=<id>`: that one's; cast links aren't listed); make one: `{ video, expires }` or `{ playlist, expires }` with `"1d"`, `"1w"`, `"1m"` or `"never"` (201, the `Share`), or `{ video, cast: true }` for a Cast device (a day long, reused while it has half of that left) |
 | `DELETE /api/shares/<token>` | Revoke a link (204; 404 when there's none) |
 | `GET/HEAD /api/s/<token>/file`, `GET /api/s/<token>/thumb` | **No session**: a share link's video (as `/api/videos/<id>/file`, `?download` as an attachment named for its title) and still, with `Access-Control-Allow-Origin: *`; 404 once the link has expired or been revoked, and for a playlist link (it has no video of its own) |
@@ -22,7 +23,7 @@
 | `GET /api/storage` | `{ library, trash, free, total }` in bytes ([library](library.md#disk-usage)) |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 
-Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.
+Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file, audio and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.
 
 ## The proxy and the upload
 

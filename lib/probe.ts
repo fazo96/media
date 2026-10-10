@@ -142,7 +142,7 @@ export function pickAudio(tracks: AudioTrack[], languages: string[], playable: S
 }
 
 /** The track a player picks in a file as it is: the default one, else the first. */
-const playedAsIs = (tracks: AudioTrack[]) => Math.max(0, tracks.findIndex((t) => t.default));
+export const playedAsIs =(tracks: AudioTrack[]) => Math.max(0, tracks.findIndex((t) => t.default));
 
 export type Plan = {
   /** mp4 or webm; null for a file kept as it is in another container. */
@@ -204,6 +204,19 @@ export async function remux(from: string, to: string, how: Plan, p: Probe, signa
   );
 }
 
+/**
+ * Write one audio track alone (`index` into the probe's), for listen mode:
+ * copied into `container` when a browser plays it there, converted to AAC
+ * otherwise (then always mp4).
+ */
+export async function extractAudio(from: string, to: string, index: number, track: AudioTrack, container: Container): Promise<void> {
+  const codec = AUDIO[container].has(track.codec) ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", (track.channels ?? 2) > 2 ? "384k" : "192k"];
+  const fast = container === "mp4" ? ["-movflags", "+faststart"] : [];
+  await run("ffmpeg", ["-v", "error", "-y", "-i", from, "-map", `0:a:${index}`, "-vn", "-sn", "-dn", ...codec, ...fast, "-f", container, to]);
+}
+
+/** The container listen mode keeps a track in: webm for Vorbis (mp4 can't hold it), mp4 for the rest. */
+export const audioContainer = (codec: string | undefined): Container => (codec === "vorbis" ? "webm" : "mp4");
 
 /** A 640px-wide still from a tenth of the way in (at most 10 seconds). */
 export async function thumbnail(file: string, to: string, duration: number): Promise<void> {

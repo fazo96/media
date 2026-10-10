@@ -83,9 +83,12 @@ export const downloadPlaylist = (list: string) =>
 export const createPlaylist = async (title: string) =>
   (await api<{ playlist: Playlist }>("/api/playlists", { method: "POST", json: { title } })).playlist;
 
-/** Rename a playlist, or add videos to it (at the end) and take them out. */
-export const changePlaylist = (id: string, change: { title?: string; add?: string[]; remove?: string[] }) =>
+/** Rename a playlist, add videos to it (at the end) and take them out, or turn listen mode on or off for all its videos. */
+export const changePlaylist = (id: string, change: { title?: string; add?: string[]; remove?: string[]; listen?: boolean }) =>
   api<Playlist>(`/api/playlists/${id}`, { method: "PATCH", json: change });
+
+/** Turn a video's listen mode on or off: its audio alone plays. */
+export const setListen = (id: string, listen: boolean) => api<Video>(`/api/videos/${id}`, { method: "PATCH", json: { listen } });
 
 /** Where the player is. As a beacon when the page is going away (it outlives the page). */
 export function saveProgress(id: string, body: { position: number; started?: boolean; ended?: boolean }, beacon = false) {

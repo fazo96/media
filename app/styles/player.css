@@ -198,7 +198,7 @@
   min-width: 0;
 }
 
-/* ─── Share and Cast, under the video (share links are listed in Settings too) ─── */
+/* ─── Share, Listen and Cast, under the video (share links are listed in Settings too) ─── */
 .watch-actions {
   display: flex;
   flex-wrap: wrap;
@@ -211,11 +211,6 @@
 .share-panel .btn svg {
   width: 16px;
   height: 16px;
-}
-
-.btn.is-on {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .share {

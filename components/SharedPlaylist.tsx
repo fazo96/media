@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, formatHeight, formatSize } from "@/lib/format";
 import { IconDownload, IconFilm, IconWarn } from "./icons";
+import { useMediaSession } from "./useMediaSession";
 
 /** What a playlist link's page knows of a video: enough to play and list it, nothing about watching it here. */
 export type SharedItem = {
@@ -45,6 +46,16 @@ export default function SharedPlaylist({ token, title, channel, videos, start }:
     url.searchParams.set("v", videos[i].id);
     history.replaceState(history.state, "", url);
   };
+
+  useMediaSession(ref, {
+    src: v ? `${base(v)}/file` : "",
+    title: v?.title ?? title,
+    artist: v?.channel,
+    album: title,
+    artwork: v?.hasThumb ? `${base(v)}/thumb` : undefined,
+    onPrevious: index > 0 ? () => pick(index - 1) : undefined,
+    onNext: index + 1 < videos.length ? () => pick(index + 1) : undefined,
+  });
 
   if (!v) {
     return (

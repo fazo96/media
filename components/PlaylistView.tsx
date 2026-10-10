@@ -8,7 +8,7 @@ import { formatDuration } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
 import type { Job, Playlist, Video } from "@/lib/types";
 import { youtubeUrl } from "@/lib/youtube";
-import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconPlay, IconRefresh, IconTrash } from "./icons";
+import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash } from "./icons";
 import { playlistCount } from "./PlaylistCard";
 import ShareButton from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
@@ -117,6 +117,18 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     }
   };
 
+  // Listen mode is each video's: the playlist's button sets it for all of them, and shows on once they all have it.
+  const allListen = present.length > 0 && present.every((v) => v.listen);
+  const toggleListen = async () => {
+    const listen = !allListen;
+    try {
+      setP(await changePlaylist(p.id, { listen }));
+      setVideos((prev) => prev.map((v) => (p.items.includes(v.id) ? { ...v, listen } : v)));
+    } catch (err) {
+      fail(err);
+    }
+  };
+
   const playHref = (v: Video) => `/v/${v.id}?list=${p.id}`;
 
   return (
@@ -163,6 +175,17 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
               <Link href={playHref(present[0])} className="btn btn-primary">
                 <IconPlay /> Play all
               </Link>
+            )}
+            {present.length > 0 && (
+              <button
+                type="button"
+                className={`btn ${allListen ? "is-on" : ""}`}
+                onClick={toggleListen}
+                aria-pressed={allListen}
+                title={allListen ? "Its videos play their audio alone: turn that off for all of them" : "Play all its videos’ audio alone, which keeps playing with the screen off"}
+              >
+                <IconHeadphones /> Listen
+              </button>
             )}
             <button
               type="button"

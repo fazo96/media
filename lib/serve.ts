@@ -4,19 +4,28 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { fileName } from "./browse";
-import { thumbFile, videoFile } from "./library";
+import { audioFile, audioMime, thumbFile, videoFile } from "./library";
 import { parseRange } from "./range";
 import { notFound } from "./route";
 import type { Video } from "./types";
 
-// Sending a video's file and still: to the app (api/videos/<id>/…) and to a
-// share link (api/s/<token>/…), which differ only in their headers.
+// Sending a video's file, its audio alone (listen mode) and its still: to the
+// app (api/videos/<id>/…) and to a share link (api/s/<token>/…), which differ
+// only in their headers.
 
 type Options = { headers?: Record<string, string>; download?: boolean };
 
 /** The video file, in byte ranges as the player seeks (lib/range.ts); as an attachment named for its title when `download`. */
-export async function serveVideo(req: Request, v: Video, { headers: extra = {}, download = false }: Options = {}): Promise<Response> {
-  const file = videoFile(v);
+export const serveVideo = (req: Request, v: Video, options: Options = {}) =>
+  serveFile(req, videoFile(v), v.mime, fileName(v.title) + path.extname(v.file), options);
+
+/** Its audio alone, for listen mode (made on first asking: lib/library.ts). 404 when it has none. */
+export async function serveAudio(req: Request, v: Video, options: Options = {}): Promise<Response> {
+  const file = await audioFile(v);
+  return file ? serveFile(req, file, audioMime(v), fileName(v.title) + path.extname(file), options) : notFound();
+}
+
+async function serveFile(req: Request, file: string, mime: string, name: string, { headers: extra = {}, download = false }: Options): Promise<Response> {
   let size: number;
   let mtime: Date;
   try {
@@ -24,9 +33,8 @@ export async function serveVideo(req: Request, v: Video, { headers: extra = {}, 
   } catch {
     return notFound();
   }
-  const name = fileName(v.title) + path.extname(v.file);
   const headers: Record<string, string> = {
-    "Content-Type": v.mime,
+    "Content-Type": mime,
     "Accept-Ranges": "bytes",
     // A re-download replaces the file under the same URL.
     "Cache-Control": "private, no-cache",
