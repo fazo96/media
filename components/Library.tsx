@@ -14,6 +14,7 @@ import PlaylistCard from "./PlaylistCard";
 import PlaylistPreview, { type Preview } from "./PlaylistPreview";
 import SearchResults, { type Search } from "./SearchResults";
 import StorageMeter from "./StorageMeter";
+import NowPlayingWidget from "./NowPlayingWidget";
 import ThemeButton from "./ThemeButton";
 import TransmissionPanel from "./TransmissionPanel";
 import VideoCard from "./VideoCard";
@@ -410,6 +411,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           />
         </label>
         <div className="topbar-right">
+          <NowPlayingWidget />
           <StorageMeter initial={storage} watch={`${videos.length}:${videos.reduce((sum, v) => sum + v.size, 0)}`} />
           <ThemeButton />
           <Link href="/settings" className="icon-btn" aria-label="Settings" title="Settings">

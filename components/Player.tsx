@@ -3,46 +3,51 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { saveProgress, setListen } from "@/lib/api";
+import { setListen } from "@/lib/api";
 import { formatAgo, formatDuration, formatHeight, formatSize } from "@/lib/format";
 import type { Video } from "@/lib/types";
-import { IconBack, IconCast, IconExternal, IconFilm, IconHeadphones, IconNext, IconWarn } from "./icons";
+import { IconBack, IconCast, IconExternal, IconFilm, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconWarn } from "./icons";
+import { type NowPlaying, type Queue, useNowPlaying } from "./NowPlaying";
+import NowPlayingWidget from "./NowPlayingWidget";
 import ShareButton from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
 import { useCast } from "./useCast";
 import { useMediaSession } from "./useMediaSession";
+import { type Start, usePlayback } from "./usePlayback";
 import { thumbUrl } from "./VideoCard";
 
-/** How often, while playing, where it is goes to the server. */
-const SAVE_EVERY_MS = 5000;
-/** Too close to either end to be worth resuming from. */
-const RESUME_MARGIN_S = 5;
 /** In a playlist, how long "Up next" waits before playing it. */
 const UP_NEXT_S = 5;
 
 const KEYS_HELP = "Space or K play/pause · J/L −/+10s · ←/→ −/+5s · F fullscreen · M mute";
 
-/** The playlist it's playing from (/v/<id>?list=<pid>): its videos in the library, in order. */
-type Queue = { id: string; title: string; videos: Video[] };
-
-/** The player page: the video, picking up where it was left, and what else was watched lately (or what's next in its playlist). */
+/**
+ * The player page: the video, picking up where it was left, and what else was
+ * watched lately (or what's next in its playlist). In listen mode the now
+ * playing layer (components/NowPlaying.tsx) plays it instead, and this page
+ * drives that.
+ */
 export default function Player({ video: v, others, playlist }: { video: Video; others: Video[]; playlist?: Queue }) {
   const router = useRouter();
   const ref = useRef<HTMLVideoElement>(null);
+  const now = useNowPlaying();
   const [resumed, setResumed] = useState<number | null>(null);
   const [failed, setFailed] = useState(false);
-  // Whether this page counted its play: a ref, so it holds however often the effect below runs (StrictMode runs it twice).
-  const started = useRef(false);
   // While it plays on a TV (useCast), which keeps the server told where it is instead.
   const casting = useRef(false);
-  // Listen mode (docs/pages.md#listen-mode): the same element plays the audio alone, which a phone keeps playing with the screen off.
+  // Listen mode (docs/pages.md#listen-mode): the layer plays the audio alone, which keeps playing from page to page, and with a phone's screen off.
   const [listen, setListenState] = useState(!!v.listen);
   const [listenError, setListenError] = useState<string | null>(null);
+  // A hand-over between the page's video and the layer: where the one taking over starts (null: its saved place).
+  const start = useRef<Start | null>(null);
+  const handOff = useRef<Start | null>(null);
+  const queue = playlist ?? null;
+  // The layer has this one loaded: the page shows it, and follows it when it moves on.
+  const mine = listen && now.track?.id === v.id;
+  // What the keys work on: the video, or in listen mode the layer's audio.
   const listening = useRef(listen);
   listening.current = listen;
-  // Switching between the two: where it was and whether it played, for when the other source loads (null: not switching).
-  const carry = useRef<{ time: number; playing: boolean } | null>(null);
-  const src = listen ? `/api/videos/${v.id}/audio` : `/api/videos/${v.id}/file`;
+  const audio = now.audio;
 
   // In a playlist: the ones either side, and the seconds left before the next one plays (null: not counting).
   const index = playlist ? playlist.videos.findIndex((o) => o.id === v.id) : -1;
@@ -65,84 +70,62 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     return () => clearTimeout(timer);
   }, [upNext, router]);
 
-  // Resume, count the play, and keep the server told where playback is.
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    let lastSave = 0;
-    let lastSent = -1;
-    const save = (beacon = false) => {
-      const position = el.currentTime;
-      // Mid-switch the element is between sources, at 0: nothing to tell.
-      if (!started.current || casting.current || carry.current || Math.abs(position - lastSent) < 0.05) return;
-      lastSent = position;
-      lastSave = Date.now();
-      void saveProgress(v.id, { position }, beacon);
-    };
-    const onMeta = () => {
-      const was = carry.current;
-      if (was) {
-        el.currentTime = was.time;
-        if (!was.playing) el.pause(); // autoplay applies to every new source
-        carry.current = null;
-        return;
-      }
-      const d = el.duration || v.duration;
-      if (v.position > RESUME_MARGIN_S && v.position < d - RESUME_MARGIN_S) {
-        el.currentTime = v.position;
-        setResumed(v.position);
-      }
-    };
-    const onPlay = () => {
+  // The video (not in listen mode): resume, count the play, and keep the server told where it is.
+  const playback = usePlayback(ref, {
+    video: listen ? null : v,
+    start,
+    casting,
+    onResumed: setResumed,
+    onPlay: () => {
       setUpNext(null);
-      if (started.current) return;
-      started.current = true;
-      lastSave = Date.now();
-      lastSent = el.currentTime;
-      void saveProgress(v.id, { position: el.currentTime, started: true });
-    };
-    const onTime = () => {
-      if (Date.now() - lastSave >= SAVE_EVERY_MS) save();
-    };
-    const onPause = () => !el.ended && save();
-    const onEnded = () => {
-      lastSent = 0;
-      void saveProgress(v.id, { position: 0, ended: true });
+      now.pause(); // one thing playing at a time
+    },
+    onEnded: () => {
       if (!nav.current.next) return;
-      // Listening, or with the screen off, nobody's there to read a countdown: straight on.
-      if (listening.current || document.visibilityState === "hidden") router.push(nav.current.next);
+      // With the screen off, nobody's there to read a countdown: straight on.
+      if (document.visibilityState === "hidden") router.push(nav.current.next);
       else setUpNext(UP_NEXT_S);
-    };
-    const onHide = () => document.visibilityState === "hidden" && save(true);
-    const onLeave = () => save(true);
+    },
+  });
 
-    if (el.readyState >= 1) onMeta();
-    // Autoplay may have started before this ran, so its play event was missed.
-    if (!el.paused) onPlay();
-    el.addEventListener("loadedmetadata", onMeta);
-    el.addEventListener("play", onPlay);
-    el.addEventListener("timeupdate", onTime);
-    el.addEventListener("pause", onPause);
-    el.addEventListener("ended", onEnded);
-    document.addEventListener("visibilitychange", onHide);
-    window.addEventListener("pagehide", onLeave);
-    return () => {
-      // Leaving through an in-app link: the page stays, so this is the last word.
-      if (!el.ended) save(true);
-      el.removeEventListener("loadedmetadata", onMeta);
-      el.removeEventListener("play", onPlay);
-      el.removeEventListener("timeupdate", onTime);
-      el.removeEventListener("pause", onPause);
-      el.removeEventListener("ended", onEnded);
-      document.removeEventListener("visibilitychange", onHide);
-      window.removeEventListener("pagehide", onLeave);
-    };
-  }, [v.id, router]);
+  // Listen mode: the layer plays it, as the video would (autoplaying), unless it has it already.
+  // Out of it, a video the layer has (listen mode turned off here, or elsewhere) is taken back from it.
+  useEffect(() => {
+    if (listen) {
+      now.listen(v, queue, handOff.current ?? { playing: true });
+      handOff.current = null;
+    } else if (now.track?.id === v.id) {
+      start.current = { time: now.time, playing: now.playing, counted: now.counted() };
+      now.stop();
+    }
+  }, [listen, v.id]);
+
+  // The layer moved on (its end, or its next): the page follows, to that one's page.
+  const followed = useRef(false);
+  useEffect(() => {
+    if (!listen) {
+      followed.current = false;
+      return;
+    }
+    const t = now.track;
+    if (t?.id === v.id) followed.current = true;
+    else if (followed.current && t) router.push(now.queue ? `/v/${t.id}?list=${now.queue.id}` : `/v/${t.id}`);
+  }, [listen, now.track?.id, v.id, router]);
+
+  // The page's video is up: the notification is its, and the layer playing pauses it.
+  useEffect(() => {
+    if (listen) return;
+    now.setPageVideo(true);
+    return () => now.setPageVideo(false);
+  }, [listen]);
+  useEffect(() => {
+    if (!listen && now.playing) ref.current?.pause();
+  }, [listen, now.playing]);
 
   // The keys YouTube taught everyone, wherever focus is (but in a text field).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = ref.current;
+      const el: HTMLMediaElement | null = listening.current ? audio.current : ref.current;
       if (!el || e.metaKey || e.ctrlKey || e.altKey) return;
       if ((e.target as HTMLElement | null)?.closest("input, textarea, select, [contenteditable]")) return;
       // Shift+N / Shift+P: the next and previous video in the playlist.
@@ -163,7 +146,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
         l: () => seek(10),
         ArrowLeft: () => seek(-5),
         ArrowRight: () => seek(5),
-        f: () => (document.fullscreenElement ? void document.exitFullscreen() : void el.requestFullscreen?.()),
+        f: () => (document.fullscreenElement ? void document.exitFullscreen() : el === ref.current && void el.requestFullscreen?.()),
         m: () => {
           el.muted = !el.muted;
         },
@@ -177,9 +160,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [router]);
+  }, [router, audio]);
 
   const startOver = () => {
+    if (listen) return now.startOver();
     const el = ref.current;
     if (!el) return;
     el.currentTime = 0;
@@ -187,12 +171,16 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     void el.play();
   };
 
-  /** Listen mode on or off, for this video on every device: playing on from the same place with the other source. */
+  /**
+   * Listen mode on or off, for this video on every device, playing on from the
+   * same place: the video hands over to the layer here, and the layer back to
+   * the video in the effect above.
+   */
   const toggleListen = async () => {
     const el = ref.current;
     const on = !listen;
     setListenError(null);
-    if (el && el.readyState >= 1 && !carry.current) carry.current = { time: el.currentTime, playing: !el.paused };
+    if (on && el) handOff.current = el.readyState >= 1 ? { time: el.currentTime, playing: !el.paused, counted: playback.counted() } : { playing: !el.paused };
     setFailed(false);
     setListenState(on);
     try {
@@ -202,8 +190,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     }
   };
 
+  // The video's notification; in listen mode, the layer has its own.
   useMediaSession(ref, {
-    src,
+    enabled: !listen,
+    src: `/api/videos/${v.id}/file`,
     title: v.title,
     artist: v.channel,
     album: playlist?.title,
@@ -211,6 +201,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     onPrevious: prev ? () => router.push(nav.current.prev) : undefined,
     onNext: next ? () => router.push(nav.current.next) : undefined,
   });
+
+  // In listen mode what the layer says of it, once it has it.
+  const lost = listen ? mine && now.failed : failed;
+  const pickedUp = listen ? (mine ? now.resumed : null) : resumed;
 
   const details = [
     v.duration ? formatDuration(v.duration) : null,
@@ -233,28 +227,33 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
         )}
         <span className="topbar-title">{v.title}</span>
         <div className="topbar-right">
+          <NowPlayingWidget />
           <ThemeButton />
         </div>
       </header>
 
       <main className="watch">
         <section className="stage">
-          <div className="screen">
-            {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
-            <video
-              ref={ref}
-              src={src}
-              poster={v.hasThumb ? thumbUrl(v) : undefined}
-              controls
-              autoPlay
-              playsInline
-              preload="metadata"
-              onError={() => {
-                carry.current = null;
-                setFailed(true);
-              }}
-            />
-          </div>
+          {listen ? (
+            <>
+              <div className="screen is-listening">{v.hasThumb ? <img src={thumbUrl(v)} alt="" /> : <IconHeadphones />}</div>
+              <ListenControls now={now} mine={mine} duration={v.duration} inPlaylist={!!playlist} />
+            </>
+          ) : (
+            <div className="screen">
+              {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
+              <video
+                ref={ref}
+                src={`/api/videos/${v.id}/file`}
+                poster={v.hasThumb ? thumbUrl(v) : undefined}
+                controls
+                autoPlay
+                playsInline
+                preload="metadata"
+                onError={() => setFailed(true)}
+              />
+            </div>
+          )}
 
           {cast.device && (
             <p className="notice" role="status">
@@ -289,10 +288,10 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             </p>
           )}
 
-          {(failed || (!v.playable && !listen)) && (
+          {(lost || (!v.playable && !listen)) && (
             <p className="notice is-error" role="alert">
               <IconWarn />
-              {failed && listen
+              {lost && listen
                 ? "Its audio couldn’t be played: it may have none, or the server couldn’t take it out. Turn listen mode off to play the video."
                 : failed
                 ? `This browser can’t play it (${v.videoCodec ?? "unknown codec"}). It’s still in the library; another browser, or a re-download, may do.`
@@ -332,7 +331,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               >
                 <IconHeadphones /> Listen
               </button>
-              {cast.available && (
+              {cast.available && !listen && (
                 <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
                   <IconCast /> {cast.device ? "Casting" : "Cast"}
                 </button>
@@ -344,9 +343,9 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                 {listenError}
               </p>
             )}
-            {resumed !== null && (
+            {pickedUp !== null && (
               <p className="resumed">
-                Picked up at {formatDuration(resumed)}.{" "}
+                Picked up at {formatDuration(pickedUp)}.{" "}
                 <button type="button" className="link-btn" onClick={startOver}>
                   Start over
                 </button>
@@ -406,5 +405,52 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
         )}
       </main>
     </div>
+  );
+}
+
+/**
+ * Listen mode's controls, for the layer's audio (it has no element on the
+ * page to show): previous and next in a playlist, play or pause, where it
+ * is, and a slider to move there. Until the layer has this one, they wait.
+ */
+function ListenControls({ now, mine, duration, inPlaylist }: { now: NowPlaying; mine: boolean; duration: number; inPlaylist: boolean }) {
+  const time = mine ? now.time : 0;
+  const length = (mine && now.duration) || duration;
+  return (
+    <section className="listen-controls" aria-label="Listening">
+      {inPlaylist && (
+        <button type="button" className="icon-btn" onClick={now.previous} disabled={!mine || !now.previous} aria-label="Previous" title="Previous">
+          <IconPrevious />
+        </button>
+      )}
+      {mine && now.playing ? (
+        <button type="button" className="icon-btn listen-play" onClick={now.pause} aria-label="Pause" title="Pause">
+          <IconPause />
+        </button>
+      ) : (
+        <button type="button" className="icon-btn listen-play" onClick={now.play} disabled={!mine} aria-label="Play" title="Play">
+          <IconPlay />
+        </button>
+      )}
+      {inPlaylist && (
+        <button type="button" className="icon-btn" onClick={now.next} disabled={!mine || !now.next} aria-label="Next" title="Next">
+          <IconNext />
+        </button>
+      )}
+      <span className="listen-time">
+        {formatDuration(time)} / {formatDuration(length)}
+      </span>
+      <input
+        type="range"
+        className="listen-seek"
+        min={0}
+        max={length || 0}
+        step="any"
+        value={Math.min(time, length || 0)}
+        onChange={(e) => now.seek(Number(e.target.value))}
+        disabled={!mine}
+        aria-label="Seek"
+      />
+    </section>
   );
 }

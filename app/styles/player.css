@@ -42,6 +42,57 @@
   background: #000;
 }
 
+/* Listen mode: the still, and controls for the now playing layer's audio. */
+.screen.is-listening {
+  display: grid;
+  place-items: center;
+  max-height: calc(100dvh - var(--topbar-h) - 190px);
+  color: #fff;
+}
+
+.screen.is-listening img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.screen.is-listening svg {
+  width: 56px;
+  height: 56px;
+  opacity: 0.6;
+}
+
+.listen-controls {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.listen-controls .icon-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.listen-controls .listen-play {
+  color: var(--ink);
+}
+
+.listen-time {
+  flex-shrink: 0;
+  min-width: 92px;
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.listen-seek {
+  flex: 1;
+  min-width: 0;
+  accent-color: var(--accent);
+}
+
 .stage .notice {
   margin-top: 12px;
 }

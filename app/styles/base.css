@@ -176,9 +176,91 @@ input {
 
 .topbar-right {
   display: flex;
+  align-items: center;
   gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
+}
+
+/* Now playing (components/NowPlayingWidget.tsx): a listen mode track, on every page. */
+.now-playing {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: 40px;
+  padding: 0 2px 0 4px;
+  border: 1px solid var(--rule);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.now-playing .icon-btn {
+  width: 32px;
+  height: 32px;
+}
+
+.now-playing-track {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding-right: 4px;
+  color: inherit;
+  text-decoration: none;
+}
+
+.now-playing-thumb {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--bg-sunk);
+  color: var(--ink-soft);
+}
+
+.now-playing-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.now-playing-title {
+  max-width: 200px;
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.now-playing-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--accent);
+  transform-origin: left;
+  pointer-events: none;
+}
+
+/* On a phone: the still, play or pause, next, and stop; on a narrow one, no
+   next (the notification has it), and the top bar makes room for it. */
+@media (max-width: 720px) {
+  .now-playing-title {
+    display: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .now-playing-next,
+  .topbar:has(.now-playing) .wordmark span,
+  .topbar:has(.now-playing) .storage {
+    display: none;
+  }
 }
 
 .empty-page {

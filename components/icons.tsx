@@ -179,3 +179,15 @@ export const IconHeadphones = (p: P) => (
     <rect x="13.5" y="11.5" width="3" height="5" rx="1" />
   </svg>
 );
+
+export const IconPause = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M7 4.5v11M13 4.5v11" strokeWidth={2.2} />
+  </svg>
+);
+
+export const IconPrevious = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M15 5v10l-7.5-5zM5 5v10" />
+  </svg>
+);

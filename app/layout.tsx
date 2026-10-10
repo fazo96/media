@@ -1,4 +1,5 @@
 import type { Metadata, Viewport } from "next";
+import { NowPlayingProvider } from "@/components/NowPlaying";
 import ServiceWorker from "@/components/ServiceWorker";
 // Fonts from npm (@fontsource-variable) rather than next/font/google, so a build
 // never has to reach Google; the families are named in styles/base.css.
@@ -41,7 +42,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
       <body>
-        {children}
+        {/* Above the pages, so a listen mode track plays on as they change (docs/pages.md#now-playing). */}
+        <NowPlayingProvider>{children}</NowPlayingProvider>
         <ServiceWorker />
       </body>
     </html>

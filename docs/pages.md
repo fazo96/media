@@ -23,9 +23,9 @@ Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), an
 
 ## The player (`/v/<id>`, `components/Player.tsx`)
 
-A native `<video>` streaming `/api/videos/<id>/file`. It resumes from `position` unless that's within 5 seconds of either end, saying so with a "Start over". It counts a play the first time playback starts on the page (a ref, so StrictMode's double effects don't count twice; and checked on mount, since autoplay can start before hydration). The position is saved every 5 seconds while playing, on pause, and as a beacon when the page is hidden or left; the end resets it. Keys: Space/K, J/L (±10 s), ←/→ (±5 s), F, M. Videos marked not playable, or that fail to load, show why. Beside it: the 12 most recently watched others.
+A native `<video>` streaming `/api/videos/<id>/file` (in listen mode, the [now playing layer](#now-playing) instead). It resumes (`components/usePlayback.ts`) from `position` unless that's within 5 seconds of either end, saying so with a "Start over". It counts a play the first time playback starts on the page (a ref, so StrictMode's double effects don't count twice; and checked on mount, since autoplay can start before hydration). The position is saved every 5 seconds while playing, on pause, and as a beacon when the page is hidden or left; the end resets it. Keys: Space/K, J/L (±10 s), ←/→ (±5 s), F, M. Videos marked not playable, or that fail to load, show why. Beside it: the 12 most recently watched others.
 
-Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too); in listen mode, or with the page hidden, the next one plays at once, since nobody's there to read it. Shift+N and Shift+P go to the next and previous.
+Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too); with the page hidden, the next one plays at once, since nobody's there to read it. In listen mode the layer plays straight through ([now playing](#now-playing)). Shift+N and Shift+P go to the next and previous.
 
 The tab, and the media notification, are named for the video (`generateMetadata`; the playlist page's for the playlist).
 
@@ -33,13 +33,23 @@ Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](
 
 ## Listen mode
 
-For music: the same `<video>` plays `/api/videos/<id>/audio` instead of the file, the still as its poster ([library](library.md#listen-mode)). Chrome on Android pauses a `<video>` with a picture when the page goes to the background or the screen goes off; one with sound alone plays on, to Bluetooth too. **Listen** under the details turns it on or off for the video (`PATCH /api/videos/<id> { listen }`, so every device has it), switching sources where it was, playing or paused as it was (a `carry` ref, which also keeps the position saves quiet while the element is between sources). The first time, the server makes the audio file, so it can take a few seconds to start. Casting still sends the video. A share link always plays the video.
+For music ([library](library.md#listen-mode)): the [now playing layer](#now-playing) plays `/api/videos/<id>/audio` instead of the page's `<video>`, so it plays on from page to page and, on a phone, with the screen off (Chrome on Android pauses a background `<video>` with a picture, never audio alone). The page shows the still, and controls for the layer's audio (`ListenControls`: previous and next in a playlist, play or pause, the time, a slider), since there's no element of its own to show; the keys work it too (but F). Opening a listen mode video's page has the layer play it (autoplaying, as the video would), unless it has it already: then the page shows it as it is, which is how the widget goes back to it. When the layer moves on (its end, or Next) the page follows to that one's page.
 
-There's no hand-off: switching to the audio alone when the page is hidden comes too late, as Chrome pauses first. No automated test can turn a phone's screen off: what's tested is that the source is audio alone (`videoWidth` 0).
+**Listen** under the details turns it on or off for the video (`PATCH /api/videos/<id> { listen }`, so every device has it), handing over where it was, playing or paused as it was, with its play counted once (`Start` in `components/usePlayback.ts`): on, the video gives its place to the layer; off, the page's video takes the layer's place and the layer empties. The first time, the server makes the audio file, so it can take a few seconds to start. There's no Cast in listen mode (casting sends the video), and a share link always plays the video.
+
+No automated test can turn a phone's screen off: what's tested is that the layer plays audio alone, across pages.
+
+## Now playing
+
+`components/NowPlaying.tsx`: `NowPlayingProvider` wraps every page in the root layout, which in-app navigation never unmounts, and holds one `<audio data-now-playing>` with what it has loaded: a track and the playlist it plays from (`Queue`). `usePlayback` (`components/usePlayback.ts`, which the player page's video uses too) resumes it, counts its play, and saves its place every 5 seconds, on pause, when the page is hidden, and before the next one loads; the layer sets the source itself, after that save. At a track's end it plays the next in its playlist at once, wherever the page is. A full page load (typing an address, a reload, signing out) ends it.
+
+One thing plays at a time: the player page's own video playing pauses the layer, and the layer playing (from the widget, say) pauses the video. While a video's page is up, the notification is the video's (`setPageVideo`); otherwise the layer's, with previous and next in its playlist. `useMediaSession` lets go only of what it set itself, as the two hand it back and forth.
+
+The top bar's widget (`components/NowPlayingWidget.tsx`, on the library, a playlist, the player and Settings) shows the track while one is loaded, but on that track's own page: its still and title (to its page, in its playlist), play or pause, next, stop (unloading it, its place saved), and a line for how far it is. On a phone (720px and less) the title goes; at 520px and less, next too, and the top bar drops the wordmark's name and the storage meter to make room for it.
 
 ## The media notification
 
-`components/useMediaSession.ts`, in the player and a playlist link's page: the Media Session API's metadata (title, the channel, the playlist as album, the still), so the phone's notification, lock screen and Bluetooth devices show what plays (without it, Chrome shows the page's title). Its buttons play, pause, seek ±10 s, and scrub (`setPositionState`, on play, pause, seek and rate changes; the browser carries it between), and in a playlist go to the previous and next one.
+`components/useMediaSession.ts`, in the player, the now playing layer and a playlist link's page: the Media Session API's metadata (title, the channel, the playlist as album, the still), so the phone's notification, lock screen and Bluetooth devices show what plays (without it, Chrome shows the page's title). Its buttons play, pause, seek ±10 s, and scrub (`setPositionState`, on play, pause, seek and rate changes; the browser carries it between), and in a playlist go to the previous and next one.
 
 ## Casting
 

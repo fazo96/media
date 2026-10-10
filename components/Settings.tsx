@@ -10,6 +10,7 @@ import LockSettings from "./LockSettings";
 import SettingsHead from "./SettingsHead";
 import { SharedLinks } from "./ShareLinks";
 import { isLow, StorageBar } from "./StorageMeter";
+import NowPlayingWidget from "./NowPlayingWidget";
 import ThemeButton from "./ThemeButton";
 
 const PURPOSE: Record<string, string> = {
@@ -107,6 +108,7 @@ export default function Settings({ locked }: { locked: boolean }) {
         </Link>
         <span className="topbar-title">Settings</span>
         <div className="topbar-right">
+          <NowPlayingWidget />
           <ThemeButton />
         </div>
       </header>

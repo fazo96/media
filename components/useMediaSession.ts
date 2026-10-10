@@ -7,6 +7,8 @@ import { type RefObject, useEffect, useRef } from "react";
 // Chrome names the page's title ("media") and offers play and pause alone.
 
 type Info = {
+  /** False: leave the notification to someone else (the page's video while it's up, over the layer). */
+  enabled?: boolean;
   /** What the element plays: when it changes, so may the element (a remount), and the controls follow. */
   src: string;
   title: string;
@@ -23,29 +25,38 @@ type Info = {
 
 const SEEK_S = 10;
 
+// There's one notification, and two can ask for it (the page's video, the
+// layer): each takes it as its effects run, and lets go only of what's still
+// its own, so one stepping aside doesn't clear what the other just set.
+const owner: { metadata: object | null; handlers: object | null } = { metadata: null, handlers: null };
+
 /** Tell the browser what `el` plays, and let the notification play, pause, seek and skip it. */
-export function useMediaSession(el: RefObject<HTMLMediaElement | null>, { src, title, artist, album, artwork, onPrevious, onNext }: Info) {
+export function useMediaSession(el: RefObject<HTMLMediaElement | null>, { enabled = true, src, title, artist, album, artwork, onPrevious, onNext }: Info) {
   const skip = useRef({ onPrevious, onNext });
   skip.current = { onPrevious, onNext };
   const hasPrevious = !!onPrevious;
   const hasNext = !!onNext;
 
   useEffect(() => {
-    if (!("mediaSession" in navigator)) return;
-    navigator.mediaSession.metadata = new MediaMetadata({
+    if (!enabled || !("mediaSession" in navigator)) return;
+    const metadata = new MediaMetadata({
       title,
       artist: artist ?? "",
       album: album ?? "",
       artwork: artwork ? [{ src: new URL(artwork, location.href).href, type: "image/jpeg" }] : [],
     });
+    navigator.mediaSession.metadata = metadata;
+    owner.metadata = metadata;
     return () => {
+      if (owner.metadata !== metadata) return;
+      owner.metadata = null;
       navigator.mediaSession.metadata = null;
     };
-  }, [title, artist, album, artwork]);
+  }, [enabled, title, artist, album, artwork]);
 
   useEffect(() => {
     const media = el.current;
-    if (!("mediaSession" in navigator) || !media) return;
+    if (!enabled || !("mediaSession" in navigator) || !media) return;
     const session = navigator.mediaSession;
     const seekTo = (t: number) => {
       media.currentTime = Math.max(0, Math.min(media.duration || Number.POSITIVE_INFINITY, t));
@@ -59,6 +70,8 @@ export function useMediaSession(el: RefObject<HTMLMediaElement | null>, { src, t
       ["previoustrack", hasPrevious ? () => skip.current.onPrevious?.() : null],
       ["nexttrack", hasNext ? () => skip.current.onNext?.() : null],
     ];
+    const mine = {};
+    owner.handlers = mine;
     for (const [action, fn] of handlers) {
       try {
         session.setActionHandler(action, fn);
@@ -74,6 +87,7 @@ export function useMediaSession(el: RefObject<HTMLMediaElement | null>, { src, t
       } catch {}
     };
     const state = () => {
+      if (owner.handlers !== mine) return;
       session.playbackState = media.paused ? "paused" : "playing";
       position();
     };
@@ -82,11 +96,13 @@ export function useMediaSession(el: RefObject<HTMLMediaElement | null>, { src, t
     state();
     return () => {
       for (const e of events) media.removeEventListener(e, state);
+      if (owner.handlers !== mine) return;
+      owner.handlers = null;
       for (const [action] of handlers) {
         try {
           session.setActionHandler(action, null);
         } catch {}
       }
     };
-  }, [el, src, hasPrevious, hasNext]);
+  }, [enabled, el, src, hasPrevious, hasNext]);
 }

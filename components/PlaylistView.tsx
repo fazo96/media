@@ -11,6 +11,7 @@ import { youtubeUrl } from "@/lib/youtube";
 import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash } from "./icons";
 import { playlistCount } from "./PlaylistCard";
 import ShareButton from "./ShareLinks";
+import NowPlayingWidget from "./NowPlayingWidget";
 import ThemeButton from "./ThemeButton";
 import { thumbUrl } from "./VideoCard";
 
@@ -139,6 +140,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
         </Link>
         <span className="topbar-title">{p.title}</span>
         <div className="topbar-right">
+          <NowPlayingWidget />
           <ThemeButton />
         </div>
       </header>

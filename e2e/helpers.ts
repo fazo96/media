@@ -1,5 +1,6 @@
 import path from "node:path";
 import type { APIRequestContext } from "@playwright/test";
+import type { Video } from "../lib/types";
 
 export const FIXTURE = path.resolve("tests/fixtures/clip.mp4");
 
@@ -11,7 +12,7 @@ export async function upload(request: APIRequestContext, name: string) {
     data: fs.readFileSync(FIXTURE),
   });
   if (!res.ok()) throw new Error(`upload failed: ${res.status()} ${await res.text()}`);
-  return (await res.json()) as { id: string; title: string };
+  return (await res.json()) as Video;
 }
 
 /** A name no other test uses. */
