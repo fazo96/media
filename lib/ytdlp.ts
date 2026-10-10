@@ -1,7 +1,7 @@
 import "server-only";
 import { run } from "./tools";
-import type { PlaylistResult, SearchResult, SearchResults, YoutubePlaylist } from "./types";
-import { parsePlaylist, parseYoutube, playlistUrl } from "./youtube";
+import type { PlaylistResult, SearchResult, SearchResults, VideoInfo, YoutubePlaylist } from "./types";
+import { parsePlaylist, parseYoutube, playlistUrl, youtubeUrl } from "./youtube";
 
 // Reading YouTube with yt-dlp (docs/downloads.md#searching): searches and whole
 // playlists, flat (the results pages, not each video), nothing downloaded.
@@ -114,4 +114,25 @@ export function parsePlaylistInfo(out: string, listId: string): YoutubePlaylist 
 export async function inspectPlaylist(listId: string, signal?: AbortSignal): Promise<YoutubePlaylist> {
   const out = await run("yt-dlp", ["--flat-playlist", "--dump-single-json", "--no-warnings", "--", playlistUrl(listId)], { signal });
   return parsePlaylistInfo(out, listId);
+}
+
+/**
+ * A video's title and channel from YouTube's oEmbed (a tenth of a second,
+ * where yt-dlp takes several), for its preview page. `embeddable` is false
+ * when its owner turned embedding off (oEmbed's 401). Null when YouTube
+ * doesn't know it or can't be reached in 3 seconds: the page does without.
+ */
+export async function videoInfo(ytId: string): Promise<VideoInfo | null> {
+  // MEDIA_YOUTUBE_OEMBED: the browser tests' stub (e2e/stub-oembed.mjs).
+  const endpoint = process.env.MEDIA_YOUTUBE_OEMBED || "https://www.youtube.com/oembed";
+  const url = `${endpoint}?format=json&url=${encodeURIComponent(youtubeUrl(ytId))}`;
+  try {
+    const res = await fetch(url, { signal: AbortSignal.timeout(3000) });
+    if (res.status === 401 || res.status === 403) return { youtubeId: ytId, embeddable: false };
+    if (!res.ok) return null;
+    const data = (await res.json()) as { title?: unknown; author_name?: unknown };
+    return { youtubeId: ytId, title: str(data.title), channel: str(data.author_name), embeddable: true };
+  } catch {
+    return null;
+  }
 }

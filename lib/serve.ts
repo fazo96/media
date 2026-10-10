@@ -26,7 +26,8 @@ export async function serveAudio(req: Request, v: Video, options: Options = {}):
   return file ? serveFile(req, file, listenMime(v), fileName(v.title) + path.extname(file), options) : notFound();
 }
 
-async function serveFile(req: Request, file: string, mime: string, name: string, { headers: extra = {}, download = false }: Options): Promise<Response> {
+/** A file in byte ranges (lib/range.ts), named `name` when it's a `download`. 404 when it isn't there. */
+export async function serveFile(req: Request, file: string, mime: string, name: string, { headers: extra = {}, download = false }: Options): Promise<Response> {
   let size: number;
   let mtime: Date;
   try {

@@ -73,13 +73,30 @@
 }
 
 .torrent-file {
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.torrent-file-row {
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: 40px;
-  padding: 4px 0;
-  border-bottom: 1px solid var(--rule);
-  font-size: 14px;
+}
+
+.torrent-file-row .btn svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* A file played before it's imported, under its row. */
+.torrent-preview {
+  padding: 4px 0 8px;
+}
+
+.torrent-preview .screen video {
+  max-height: 60dvh;
 }
 
 .torrent-file:last-child {

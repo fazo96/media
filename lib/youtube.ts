@@ -52,3 +52,41 @@ export function parsePlaylist(input: string): string | null {
 
 export const youtubeUrl = (id: string) => `https://www.youtube.com/watch?v=${id}`;
 export const playlistUrl = (id: string) => `https://www.youtube.com/playlist?list=${id}`;
+
+/**
+ * Where `t=` (or `start=`) says to start, in seconds: `90`, `90s`, `1m30s`,
+ * `1h2m3s`; 0 for nothing it understands.
+ */
+export function parseStart(t: string | null | undefined): number {
+  const m = /^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s?)?$/.exec(t?.trim() ?? "");
+  if (!m) return 0;
+  return Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0);
+}
+
+/** The preview page of a YouTube video (docs/pages.md), from `start` seconds in, inside a YouTube playlist. */
+export function watchHref(ytId: string, { list, start }: { list?: string | null; start?: number } = {}): string {
+  const params = new URLSearchParams({ v: ytId });
+  if (list) params.set("list", list);
+  if (start) params.set("t", String(start));
+  return `/watch?${params}`;
+}
+
+/**
+ * YouTube's own paths, other than /watch (a page of its own), as this app's
+ * (docs/pages.md#youtubes-paths), so a YouTube link with its host swapped for
+ * this one's works: /playlist and /results go to search, /shorts, /live and
+ * /embed to /watch. Null for anything else. Ours is never one of these.
+ */
+export function youtubePath(pathname: string, params: URLSearchParams): string | null {
+  if (pathname === "/playlist") {
+    const list = params.get("list");
+    return list && LIST_ID.test(list) ? `/search?${new URLSearchParams({ list })}` : "/search";
+  }
+  if (pathname === "/results") {
+    const q = (params.get("search_query") ?? params.get("q") ?? "").trim();
+    return q ? `/search?${new URLSearchParams({ q })}` : "/search";
+  }
+  const m = /^\/(?:shorts|live|embed)\/([^/]+)\/?$/.exec(pathname);
+  if (m && YT_ID.test(m[1])) return watchHref(m[1], { start: parseStart(params.get("t") ?? params.get("start")) });
+  return null;
+}

@@ -186,6 +186,33 @@ async function getTorrent(hash: string, signal?: AbortSignal): Promise<RawTorren
 
 const finished = (f: RawTorrent["files"][number]) => f.bytesCompleted >= f.length;
 
+// What a browser is told each kind of video is; it goes by the bytes anyway.
+const MIME: Record<string, string> = { mp4: "video/mp4", m4v: "video/mp4", webm: "video/webm", mkv: "video/x-matroska", mov: "video/quicktime", ogv: "video/ogg" };
+
+/** How long a preview's torrent is trusted between asks: a seek is several requests. */
+const PREVIEW_MS = 10_000;
+const previewed = new Map<string, { at: number; t: RawTorrent | null }>();
+
+/**
+ * A torrent's finished video file (by index), to preview before importing it
+ * (GET /api/transmission/<hash>/<index>/file): where it is here, its type and
+ * name. Null when it isn't one of the torrent's videos, hasn't finished, or
+ * isn't on this machine.
+ */
+export async function previewFile(hash: string, index: number, signal?: AbortSignal): Promise<{ path: string; mime: string; name: string } | null> {
+  for (const [h, e] of previewed) if (Date.now() - e.at > PREVIEW_MS) previewed.delete(h);
+  let hit = previewed.get(hash);
+  if (!hit) {
+    hit = { at: Date.now(), t: await getTorrent(hash, signal) };
+    previewed.set(hash, hit);
+  }
+  const f = hit.t?.files[index];
+  if (!hit.t || !f || !isVideoFile(f.name) || !finished(f)) return null;
+  const from = mapPath(path.posix.join(hit.t.downloadDir, f.name), parsePathMap(process.env.MEDIA_TRANSMISSION_PATHS));
+  const ext = path.extname(f.name).slice(1).toLowerCase();
+  return { path: from, mime: MIME[ext] ?? `video/${ext}`, name: path.posix.basename(f.name) };
+}
+
 const add = queue("torrent", runImport);
 
 /**

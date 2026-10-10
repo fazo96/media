@@ -13,6 +13,7 @@ import { defineConfig, devices } from "@playwright/test";
 
 const PORT = 3101;
 const STUB_TRANSMISSION_PORT = 3102;
+const STUB_OEMBED_PORT = 3103;
 const external = process.env.MEDIA_E2E_URL;
 
 // The config is loaded again by each worker, which inherits this: one library a run.
@@ -50,6 +51,12 @@ export default defineConfig({
           reuseExistingServer: false,
         },
         {
+          // YouTube's oEmbed, for the preview page (e2e/stub-oembed.mjs).
+          command: `node e2e/stub-oembed.mjs ${STUB_OEMBED_PORT}`,
+          port: STUB_OEMBED_PORT,
+          reuseExistingServer: false,
+        },
+        {
           command: `next dev -p ${PORT}`,
           url: `http://localhost:${PORT}/api/videos`,
           reuseExistingServer: false,
@@ -60,6 +67,7 @@ export default defineConfig({
             MEDIA_YTDLP: `node ${path.resolve("e2e/stub-yt-dlp.mjs")}`,
             MEDIA_TRANSMISSION_URL: `http://127.0.0.1:${STUB_TRANSMISSION_PORT}/transmission/rpc`,
             MEDIA_TRANSMISSION_PATHS: `/downloads=${path.join(library, "downloads")}`,
+            MEDIA_YOUTUBE_OEMBED: `http://127.0.0.1:${STUB_OEMBED_PORT}/oembed`,
           },
         },
       ],

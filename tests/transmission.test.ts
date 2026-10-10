@@ -8,7 +8,7 @@ import { isActive } from "../lib/types.ts";
 import { getVideo } from "../lib/library.ts";
 import { INCOMING_DIR, MEDIA_DIR } from "../lib/paths.ts";
 import { getPlaylist } from "../lib/playlists.ts";
-import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, playlistTitleOf, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
+import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, playlistTitleOf, previewFile, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
 import type { Job, Video } from "../lib/types.ts";
 import { hasFfmpeg } from "./helpers.ts";
 
@@ -127,6 +127,18 @@ test("importTorrent refuses what it can't import", async () => {
   await assert.rejects(importTorrent(B, [3], false), (e: unknown) => e instanceof ImportError && e.status === 400);
   await assert.rejects(importTorrent(B, [9], false), (e: unknown) => e instanceof ImportError && e.status === 400);
   await assert.rejects(importTorrent("e".repeat(40), [0], false), (e: unknown) => e instanceof ImportError && e.status === 404);
+});
+
+test("previewFile finds a torrent's finished video here, and nothing else", async () => {
+  await rpc("stub-reset");
+  const movie = await previewFile(A, 0);
+  assert.deepEqual(movie, { path: path.join(root, "complete", "Stub.Movie.2020.1080p.mp4"), mime: "video/mp4", name: "Stub.Movie.2020.1080p.mp4" });
+  assert.ok(movie);
+  await access(movie.path);
+  assert.equal(await previewFile(B, 2), null); // not finished
+  assert.equal(await previewFile(B, 3), null); // not a video
+  assert.equal(await previewFile(B, 9), null);
+  assert.equal(await previewFile("e".repeat(40), 0), null);
 });
 
 test("an import copies the files in and leaves the torrent", { skip: !hasFfmpeg }, async () => {

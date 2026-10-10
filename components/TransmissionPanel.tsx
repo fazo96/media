@@ -7,11 +7,40 @@ import { formatSize } from "@/lib/format";
 import { local } from "@/lib/storage";
 import { isActive, type Job, type Torrent, type TorrentFile } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
-import { IconRefresh, IconSearch } from "./icons";
+import { IconPlay, IconRefresh, IconSearch, IconWarn } from "./icons";
+import { useNowPlaying } from "./NowPlaying";
 
 const REMOVE_KEY = "media:transmission-remove";
 const fileName = (f: TorrentFile) => f.name.split("/").pop() ?? f.name;
 const percent = (n: number) => `${Math.floor(n * 100)}%`;
+
+/** A torrent's finished file, played from Transmission's folder before it's imported. */
+function TorrentPreview({ hash, file }: { hash: string; file: TorrentFile }) {
+  const now = useNowPlaying();
+  const [failed, setFailed] = useState(false);
+  return (
+    <div className="torrent-preview">
+      {failed ? (
+        <p className="notice is-error" role="alert">
+          <IconWarn /> This browser can’t play “{fileName(file)}” as it is. Importing it may still do: the library remuxes what it can.
+        </p>
+      ) : (
+        <div className="screen">
+          {/* biome-ignore lint/a11y/useMediaCaption: torrents' files come without caption files we could load */}
+          <video
+            src={`/api/transmission/${hash}/${file.index}/file`}
+            controls
+            autoPlay
+            playsInline
+            preload="metadata"
+            onPlay={() => now.pause()} // one thing playing at a time
+            onError={() => setFailed(true)}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
 
 type Props = {
   jobs: Job[];
@@ -28,6 +57,8 @@ export default function TransmissionPanel({ jobs, onJob }: Props) {
   const [busy, setBusy] = useState<string | null>(null);
   // An import that would delete videos not in the library, waiting for a yes.
   const [confirming, setConfirming] = useState<{ hash: string; files: TorrentFile[]; all: boolean; left: number } | null>(null);
+  // The file playing under its row, before it's imported (one at a time).
+  const [previewing, setPreviewing] = useState<{ hash: string; index: number } | null>(null);
 
   useEffect(() => setRemove(local.get(REMOVE_KEY) !== "0"), []);
   const pickRemove = (on: boolean) => {
@@ -155,25 +186,41 @@ export default function TransmissionPanel({ jobs, onJob }: Props) {
                   </div>
                 )}
                 <ul className="torrent-files">
-                  {t.files.map((f) => (
-                    <li key={f.index} className="torrent-file">
-                      <span className="torrent-file-name" title={f.name}>
-                        {fileName(f)}
-                      </span>
-                      <span className="torrent-file-size">{formatSize(f.size)}</span>
-                      {f.videoId ? (
-                        <Link href={playerHref(f.videoId)} className="torrent-file-state">
-                          In the library
-                        </Link>
-                      ) : f.done < 1 ? (
-                        <span className="torrent-file-state">{percent(f.done)}</span>
-                      ) : (
-                        <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, [f], false)}>
-                          Import
-                        </button>
-                      )}
-                    </li>
-                  ))}
+                  {t.files.map((f) => {
+                    const open = previewing?.hash === t.hash && previewing.index === f.index;
+                    return (
+                      <li key={f.index} className="torrent-file">
+                        <div className="torrent-file-row">
+                          <span className="torrent-file-name" title={f.name}>
+                            {fileName(f)}
+                          </span>
+                          <span className="torrent-file-size">{formatSize(f.size)}</span>
+                          {f.videoId ? (
+                            <Link href={playerHref(f.videoId)} className="torrent-file-state">
+                              In the library
+                            </Link>
+                          ) : f.done < 1 ? (
+                            <span className="torrent-file-state">{percent(f.done)}</span>
+                          ) : (
+                            <>
+                              <button
+                                type="button"
+                                className={`btn btn-quiet btn-small ${open ? "is-on" : ""}`}
+                                aria-pressed={open}
+                                onClick={() => setPreviewing(open ? null : { hash: t.hash, index: f.index })}
+                              >
+                                <IconPlay /> Preview
+                              </button>
+                              <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, [f], false)}>
+                                Import
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        {open && !f.videoId && f.done >= 1 && <TorrentPreview hash={t.hash} file={f} />}
+                      </li>
+                    );
+                  })}
                 </ul>
               </li>
             );

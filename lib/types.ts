@@ -115,6 +115,15 @@ export type PlaylistResult = {
   thumbnail?: string;
 };
 
+/** A YouTube video not in the library, as its preview page shows it (`videoInfo()` in lib/ytdlp.ts). */
+export type VideoInfo = {
+  youtubeId: string;
+  title?: string;
+  channel?: string;
+  /** False when its owner doesn't let other sites play it: it previews on YouTube only. */
+  embeddable: boolean;
+};
+
 /** What GET /api/search answers. */
 export type SearchResults = { videos: SearchResult[]; playlists: PlaylistResult[] };
 

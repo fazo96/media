@@ -20,7 +20,7 @@ The result goes through `addVideo()` like a dropped file ([library](library.md#a
 - Videos: `yt-dlp --flat-playlist --dump-json -- ytsearch20:<query>`. `--flat-playlist` reads only the results page, not each video, so a search takes a second or two. `parseSearch()` keeps one `SearchResult` per video (id, title, channel, duration, views) and drops anything without a length, since live streams have none and their download would never finish.
 - Playlists: the same flags on YouTube's own results page filtered to playlists (`/results?search_query=…&sp=EgIQAw%253D%253D`, the filter its Filters menu sets), first 6 (`-I :6`). `parsePlaylistSearch()` keeps id, title, channel and the biggest still on `i.ytimg.com`; YouTube doesn't say how long each is. If only this search fails, the videos are answered with no playlists.
 
-A result is added with the same `POST /api/jobs`, and the thumbnails come straight from `i.ytimg.com`, as the job cards' do.
+A result is added with the same `POST /api/jobs`, and the thumbnails come straight from `i.ytimg.com`, as the job cards' do. A result's still opens its [preview](pages.md#youtubes-paths), whose title and channel come from YouTube's oEmbed instead (`videoInfo()`, also in `lib/ytdlp.ts`), since yt-dlp takes seconds to read one video.
 
 ## Playlists
 

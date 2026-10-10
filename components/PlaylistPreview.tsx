@@ -73,7 +73,7 @@ export default function PlaylistPreview({ preview, videos, jobs, onAdd, onDownlo
             <ul className="grid">
               {yt.videos.map((r) => (
                 <li key={r.youtubeId}>
-                  <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} />
+                  <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} listId={yt.youtubePlaylistId} />
                 </li>
               ))}
             </ul>

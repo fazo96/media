@@ -8,7 +8,7 @@ import YtThumb from "./YtThumb";
 export type Upload = { key: string; name: string; sent: number; state: "waiting" | "sending" | "processing" | "failed"; error?: string };
 
 /** A bar, or a sweeping one when how far along isn't known. */
-function Progress({ value }: { value: number | null }) {
+export function Progress({ value }: { value: number | null }) {
   return (
     <div className={`progress ${value === null ? "is-unknown" : ""}`} role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={value === null ? undefined : Math.round(value * 100)}>
       <span style={value === null ? undefined : { width: `${value * 100}%` }} />
@@ -18,14 +18,12 @@ function Progress({ value }: { value: number | null }) {
 
 const eta = (s?: number) => (s === undefined || !Number.isFinite(s) ? "" : s < 60 ? `${Math.round(s)}s left` : `${Math.round(s / 60)} min left`);
 
-/** A YouTube download, or an import from Transmission, in the grid until its video takes its place. */
-export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismiss: () => void; onRetry: () => void }) {
-  const failed = job.state === "failed";
+/** How a job is getting on, in a line: "42% · audio · 3 MB/s", "Converting audio", its error. */
+export function jobStatus(job: Job): string {
   const t = job.torrent;
   // Which of a torrent's files, when it's more than one.
   const of = t && t.files.length > 1 ? `${t.current + 1} of ${t.files.length}` : "";
-  const status =
-    job.state === "queued"
+  return job.state === "queued"
       ? "Waiting its turn"
       : job.state === "downloading"
         ? [
@@ -47,6 +45,13 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
           : job.state === "done"
             ? "Added"
             : (job.error ?? "Failed");
+}
+
+/** A YouTube download, or an import from Transmission, in the grid until its video takes its place. */
+export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismiss: () => void; onRetry: () => void }) {
+  const failed = job.state === "failed";
+  const t = job.torrent;
+  const status = jobStatus(job);
 
   return (
     <article className={`card card-pending ${failed ? "is-failed" : ""}`}>

@@ -67,3 +67,26 @@ test("deleting a torrent with other videos asks first; without deleting, it stay
   await expect(page.getByRole("heading", { level: 1, name: "Stub Series" })).toBeVisible();
   await expect(page.locator(".pl-item .other-title")).toHaveText(["Episode 1", "Episode 2"]);
 });
+
+test("a finished file previews before it's imported; others don't", async ({ page, request }) => {
+  const file = await request.get(`/api/transmission/${MOVIE}/0/file`, { headers: { Range: "bytes=0-99" } });
+  expect(file.status()).toBe(206);
+  expect(file.headers()["content-type"]).toBe("video/mp4");
+  expect((await file.body()).length).toBe(100);
+  for (const href of [`/api/transmission/${SERIES}/2/file`, `/api/transmission/${SERIES}/3/file`, `/api/transmission/${"e".repeat(40)}/0/file`, "/api/transmission/nope/0/file"]) {
+    expect((await request.get(href)).status(), href).toBe(404);
+  }
+
+  // An earlier test imported it: out of the library again, so it can be previewed.
+  const videos = (await (await request.get("/api/videos")).json()) as { id: string; torrentHash?: string }[];
+  for (const v of videos.filter((v) => v.torrentHash === MOVIE)) await request.delete(`/api/videos/${v.id}`);
+  await page.goto("/transmission");
+  const movie = page.getByRole("region", { name: "Transmission" }).locator(`[data-torrent="${MOVIE}"]`);
+  await movie.getByRole("button", { name: "Preview" }).click();
+  const video = movie.locator(".torrent-preview video");
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.duration || 0)).toBeGreaterThan(1);
+  await movie.getByRole("button", { name: "Preview" }).click();
+  await expect(video).toHaveCount(0);
+  // Nothing was imported or removed by looking.
+  expect((await stub("stub-removed")).removed).toEqual([]);
+});

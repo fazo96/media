@@ -29,14 +29,23 @@ Every playlist, each a `components/PlaylistCard.tsx` (up to four stills, how man
 
 YouTube, from the same box as the library's (without Add files: a link still downloads). What it shows is in the address, so a reload or Back shows it again: `?q=` a search, `?list=` a YouTube playlist, or both (the playlist above the results). `useYoutube` changes the address (`searchHref()`, a new history entry each time) and `useYoutubeShown` reads each when it changes, cancelling the one being read.
 
-- The results (`components/SearchResults.tsx`): a row of playlists, then the videos. `+` downloads one like a pasted link; one downloading says so, and one already in the library says "In the library" and plays from its still. `×` takes the search out of the address.
-- **A YouTube playlist** (`components/PlaylistPreview.tsx`), from a search or a pasted link, lists what can be downloaded, each with `+`, and **Download all (N new)** downloads the whole playlist into one in the library ([downloads](downloads.md#playlists)). Nothing downloads before that click, since a playlist can be hundreds of videos long. `×` takes it out of the address.
+- The results (`components/SearchResults.tsx`): a row of playlists, then the videos. `+` downloads one like a pasted link; one downloading says so, and one already in the library says "In the library" and plays from its still. Any other's still opens its [preview](#youtubes-paths) (`/watch?v=`), to watch it before downloading. `×` takes the search out of the address.
+- **A YouTube playlist** (`components/PlaylistPreview.tsx`), from a search or a pasted link, lists what can be downloaded, each with `+` and its still previewing it (with `&list=`, so the preview leads back to the playlist), and **Download all (N new)** downloads the whole playlist into one in the library ([downloads](downloads.md#playlists)). Nothing downloads before that click, since a playlist can be hundreds of videos long. `×` takes it out of the address.
 
 With neither, a line says what the page is for. The service worker doesn't keep it: it needs YouTube.
 
 ## Transmission (`/transmission`, `components/Transmission.tsx`)
 
-When it's [set up](transmission.md) (a 404 otherwise): the imports under way or failed, as cards with a retry and a dismiss (the library shows them too), then the torrents ([transmission](transmission.md#the-page)).
+When it's [set up](transmission.md) (a 404 otherwise): the imports under way or failed, as cards with a retry and a dismiss (the library shows them too), then the torrents ([transmission](transmission.md#the-page)), whose finished files can be previewed before they're imported.
+
+## YouTube's paths
+
+So a YouTube link works with its host swapped for this app's (by hand, or by a browser extension that redirects YouTube here), the app answers YouTube's own paths:
+
+- **`/watch?v=<id>`** (`app/watch/page.tsx`; also `&list=` and `&t=`). A video in the library goes to its player; with `list=` a YouTube playlist that was downloaded and has it, within that playlist (`/v/<id>?list=<pid>`). Otherwise it's the video's **preview** (`components/WatchPreview.tsx`): YouTube's own player (the `youtube-nocookie.com` embed, autoplaying, from `t=`), its title and channel from YouTube's oEmbed (`videoInfo()` in `lib/ytdlp.ts`: a tenth of a second, where yt-dlp takes several; given 3 seconds, then the page does without), and **Add to the library** (`POST /api/jobs`), which follows the download in its place (`jobStatus()` from `components/JobCard.tsx`, every second) until it says **Play it from the library**. A download already under way when the page opens is followed the same way. With `list=`, **Open the playlist** opens it in [search](#search-search-componentsyoutubesearchtsx). A video whose owner turned embedding off (oEmbed's 401) says so, with a link to YouTube. An `id` that isn't one is a 404.
+- **`/shorts/<id>`, `/live/<id>`, `/embed/<id>`** go to `/watch?v=<id>` (keeping `t=` or `start=`); **`/playlist?list=`** to `/search?list=`; **`/results?search_query=`** to `/search?q=`. These are redirects in `proxy.ts` (`youtubePath()` in `lib/youtube.ts`), before the lock. `youtu.be/<id>` can't be answered: its id is the whole path.
+
+The embed is YouTube's player, so it needs the internet, and the [now playing layer](#now-playing) can't see it play: the layer pauses when the page opens, and whenever the embed is clicked into (the window loses focus to it). The service worker doesn't keep these pages.
 
 ## A playlist (`/p/<id>`, `components/PlaylistView.tsx`)
 

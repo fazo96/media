@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { isValidId, slugify, youtubeIdFromVideoId, youtubeVideoId } from "../lib/ids.ts";
-import { parsePlaylist, parseYoutube } from "../lib/youtube.ts";
+import { parsePlaylist, parseStart, parseYoutube, watchHref, youtubePath } from "../lib/youtube.ts";
 
 test("parseYoutube finds the id in every usual link", () => {
   const id = "dQw4w9WgXcQ";
@@ -93,5 +93,38 @@ test("parsePlaylist turns away what isn't a playlist", () => {
     "https://www.youtube.com/playlist?list=bad/id",
   ]) {
     assert.equal(parsePlaylist(input), null, input);
+  }
+});
+
+test("parseStart reads YouTube's t=", () => {
+  assert.equal(parseStart("90"), 90);
+  assert.equal(parseStart("90s"), 90);
+  assert.equal(parseStart("1m30s"), 90);
+  assert.equal(parseStart("1h2m3s"), 3723);
+  for (const t of [null, undefined, "", "abc", "-5", "1.5"]) assert.equal(parseStart(t), 0, String(t));
+});
+
+test("watchHref is the preview page, with its playlist and start", () => {
+  assert.equal(watchHref("dQw4w9WgXcQ"), "/watch?v=dQw4w9WgXcQ");
+  assert.equal(watchHref("dQw4w9WgXcQ", { list: "PL123", start: 42 }), "/watch?v=dQw4w9WgXcQ&list=PL123&t=42");
+});
+
+test("youtubePath takes YouTube's own paths to this app's", () => {
+  const at = (href: string) => {
+    const url = new URL(href, "https://media.example");
+    return youtubePath(url.pathname, url.searchParams);
+  };
+  const list = "PL6NdkXsPL07KN01gH2vucrHCEyyNmVEx4";
+  assert.equal(at(`/playlist?list=${list}&si=abc`), `/search?list=${list}`);
+  assert.equal(at("/playlist?list=bad/id"), "/search");
+  assert.equal(at("/results?search_query=lo-fi+beats&sp=x"), "/search?q=lo-fi+beats");
+  assert.equal(at("/results"), "/search");
+  assert.equal(at("/shorts/dQw4w9WgXcQ"), "/watch?v=dQw4w9WgXcQ");
+  assert.equal(at("/live/dQw4w9WgXcQ?feature=share"), "/watch?v=dQw4w9WgXcQ");
+  assert.equal(at("/embed/dQw4w9WgXcQ?start=30"), "/watch?v=dQw4w9WgXcQ&t=30");
+  assert.equal(at("/shorts/dQw4w9WgXcQ?t=1m"), "/watch?v=dQw4w9WgXcQ&t=60");
+  // Ours, and what isn't a video, are left alone.
+  for (const href of ["/", "/watch?v=dQw4w9WgXcQ", "/v/dQw4w9WgXcQ", "/search?q=x", "/shorts/nope", "/shorts/dQw4w9WgXcQ/x"]) {
+    assert.equal(at(href), null, href);
   }
 });
