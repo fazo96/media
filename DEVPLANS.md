@@ -17,4 +17,5 @@ What's next, roughly in order. Each gets planned properly before it starts.
 - [ ] **Metadata**: edit a video's or track's metadata (title, artist, album, cover…) by hand.
 - [ ] **Metadata fetching**: fill metadata in automatically from online APIs (e.g. MusicBrainz / Cover Art Archive for music, TMDB for films).
 - [ ] **Spotify as a source**: find and add music through Spotify instead of YouTube.
+- [ ] **Content-aware search**: search the library by what's in it, not just titles, using embeddings from the EmbeddingGemma 2 model.
 - [ ] **AI help**: an assistant built in to help manage the library (tidy titles, sort into playlists, find duplicates…).
