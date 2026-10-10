@@ -2,7 +2,7 @@
 
 What's next, roughly in order. Each gets planned properly before it starts.
 
-- [ ] **Refactor pass**: clean the codebase up before any of the below.
+- [x] **Refactor pass**: clean the codebase up before any of the below.
 - [ ] **List view**: the library as a list (title, channel or artist, duration, added, plays), beside the grid, remembered per device.
 - [ ] **Multi-select**: pick several videos at once to add them to a playlist in bulk.
 - [ ] **Playlists page**: playlists get their own page instead of a shelf on the library.
