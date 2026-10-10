@@ -26,7 +26,7 @@
   height: 32px;
   padding: 0 8px;
   border: 1px solid var(--accent);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--bg-raised);
   color: var(--ink);
 }

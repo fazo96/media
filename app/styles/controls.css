@@ -7,7 +7,7 @@
   height: 38px;
   padding: 0 14px;
   border: 1px solid var(--rule);
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--bg-raised);
   color: var(--ink);
   font-weight: 500;
@@ -70,7 +70,7 @@
   width: 38px;
   height: 38px;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--ink-soft);
   cursor: pointer;
@@ -131,7 +131,7 @@
   width: 100%;
   padding: 8px 10px;
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: none;
   font-size: 14px;
   text-align: left;
@@ -154,7 +154,7 @@
   gap: 8px;
   margin: 0 0 16px;
   padding: 10px 12px;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   background: var(--accent-wash);
   font-size: 14px;
 }
@@ -243,4 +243,41 @@
 .is-low .storage-text,
 .is-low .storage-free {
   color: var(--danger);
+}
+
+/* ─── The topbar's storage meter ───────────────────────── */
+.storage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.storage:hover {
+  background: var(--bg-sunk);
+}
+
+.storage .storage-bar {
+  width: 48px;
+}
+
+@media (max-width: 720px) {
+  .storage {
+    padding: 0 6px;
+  }
+
+  .storage .storage-bar {
+    width: 28px;
+  }
+
+  .storage .storage-text {
+    display: none;
+  }
 }

@@ -9,6 +9,8 @@ import "@fontsource-variable/jetbrains-mono/wght.css";
 // ties), so keep it: base, then the shared controls, then the pages.
 import "./styles/base.css";
 import "./styles/controls.css";
+import "./styles/nowplaying.css";
+import "./styles/cards.css";
 import "./styles/library.css";
 import "./styles/playlists.css";
 import "./styles/transmission.css";

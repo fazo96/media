@@ -1,23 +1,32 @@
 /* ─── Palette ───────────────────────────────────────────────
    Light: warm off-white, like a projection screen with the house lights up.
    Dark (the default where the system asks for it): a cinema, lights down,
-   with an amber exit-sign accent. */
+   with an amber exit-sign accent. Each colour is light-dark(light, dark):
+   color-scheme picks, the system's unless the theme button set one. */
 :root {
-  --bg: #f1ede6;
-  --bg-raised: #faf7f2;
-  --bg-sunk: #e6e0d6;
-  --ink: #1c1a17;
-  --ink-soft: #5b564e;
-  --ink-faint: rgb(28 26 23 / 0.5);
-  --rule: rgb(28 26 23 / 0.12);
-  --accent: #b4561f;
-  --accent-ink: #fff8f0;
-  --accent-wash: rgb(180 86 31 / 0.1);
-  --danger: #b3261e;
-  --danger-wash: rgb(179 38 30 / 0.1);
-  --ok: #2f7a4f;
-  --scrim: rgb(20 18 15 / 0.55);
+  color-scheme: light dark;
+
+  --bg: light-dark(#f1ede6, #121110);
+  --bg-raised: light-dark(#faf7f2, #1c1a18);
+  --bg-sunk: light-dark(#e6e0d6, #0b0a09);
+  --ink: light-dark(#1c1a17, #ece7df);
+  --ink-soft: light-dark(#5b564e, #a9a196);
+  --ink-faint: light-dark(rgb(28 26 23 / 0.5), rgb(236 231 223 / 0.45));
+  --rule: light-dark(rgb(28 26 23 / 0.12), rgb(236 231 223 / 0.1));
+  --accent: light-dark(#b4561f, #e8a24f);
+  --accent-ink: light-dark(#fff8f0, #1a1206);
+  --accent-wash: light-dark(rgb(180 86 31 / 0.1), rgb(232 162 79 / 0.12));
+  --danger: light-dark(#b3261e, #ef7d6f);
+  --danger-wash: light-dark(rgb(179 38 30 / 0.1), rgb(239 125 111 / 0.12));
+  --ok: light-dark(#2f7a4f, #7fc49a);
+  --scrim: light-dark(rgb(20 18 15 / 0.55), rgb(0 0 0 / 0.65));
   --shadow: 0 10px 30px -14px rgb(40 30 15 / 0.35);
+
+  /* On a picture (a still's duration, its progress bar), whatever the theme. */
+  --on-media: #fff;
+  --on-media-bg: rgb(0 0 0 / 0.78);
+  --on-media-warn: #ffb4a8;
+  --on-media-track: rgb(255 255 255 / 0.3);
 
   --font-ui: "Inter Variable", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "JetBrains Mono Variable", ui-monospace, "SF Mono", Menlo, monospace;
@@ -25,53 +34,32 @@
   --topbar-h: 56px;
   --gutter: 16px;
   --radius: 10px;
+  --radius-sm: 8px;
+  --radius-xs: 6px;
 
   /* Stacking, lowest to highest. */
   --z-bars: 20;
   --z-float: 25; /* menus, notices */
   --z-top: 60; /* the drop target */
+}
 
+:root[data-theme="light"] {
   color-scheme: light;
 }
 
+:root[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+/* A shadow isn't a colour (light-dark() takes only colours): dark's is deeper. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --bg: #121110;
-    --bg-raised: #1c1a18;
-    --bg-sunk: #0b0a09;
-    --ink: #ece7df;
-    --ink-soft: #a9a196;
-    --ink-faint: rgb(236 231 223 / 0.45);
-    --rule: rgb(236 231 223 / 0.1);
-    --accent: #e8a24f;
-    --accent-ink: #1a1206;
-    --accent-wash: rgb(232 162 79 / 0.12);
-    --danger: #ef7d6f;
-    --danger-wash: rgb(239 125 111 / 0.12);
-    --ok: #7fc49a;
-    --scrim: rgb(0 0 0 / 0.65);
     --shadow: 0 14px 34px -14px rgb(0 0 0 / 0.8);
-    color-scheme: dark;
   }
 }
 
 :root[data-theme="dark"] {
-  --bg: #121110;
-  --bg-raised: #1c1a18;
-  --bg-sunk: #0b0a09;
-  --ink: #ece7df;
-  --ink-soft: #a9a196;
-  --ink-faint: rgb(236 231 223 / 0.45);
-  --rule: rgb(236 231 223 / 0.1);
-  --accent: #e8a24f;
-  --accent-ink: #1a1206;
-  --accent-wash: rgb(232 162 79 / 0.12);
-  --danger: #ef7d6f;
-  --danger-wash: rgb(239 125 111 / 0.12);
-  --ok: #7fc49a;
-  --scrim: rgb(0 0 0 / 0.65);
   --shadow: 0 14px 34px -14px rgb(0 0 0 / 0.8);
-  color-scheme: dark;
 }
 
 /* ─── Ground ─────────────────────────────────────────────── */
@@ -180,87 +168,6 @@ input {
   gap: 4px;
   margin-left: auto;
   flex-shrink: 0;
-}
-
-/* Now playing (components/NowPlayingWidget.tsx): a listen mode track, on every page. */
-.now-playing {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  height: 40px;
-  padding: 0 2px 0 4px;
-  border: 1px solid var(--rule);
-  border-radius: 10px;
-  overflow: hidden;
-}
-
-.now-playing .icon-btn {
-  width: 32px;
-  height: 32px;
-}
-
-.now-playing-track {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  padding-right: 4px;
-  color: inherit;
-  text-decoration: none;
-}
-
-.now-playing-thumb {
-  display: grid;
-  place-items: center;
-  width: 30px;
-  height: 30px;
-  flex-shrink: 0;
-  border-radius: 6px;
-  overflow: hidden;
-  background: var(--bg-sunk);
-  color: var(--ink-soft);
-}
-
-.now-playing-thumb img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.now-playing-title {
-  max-width: 200px;
-  font-size: 13px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.now-playing-progress {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  height: 2px;
-  background: var(--accent);
-  transform-origin: left;
-  pointer-events: none;
-}
-
-/* On a phone: the still, play or pause, next, and stop; on a narrow one, no
-   next (the notification has it), and the top bar makes room for it. */
-@media (max-width: 720px) {
-  .now-playing-title {
-    display: none;
-  }
-}
-
-@media (max-width: 520px) {
-  .now-playing-next,
-  .topbar:has(.now-playing) .wordmark span,
-  .topbar:has(.now-playing) .storage {
-    display: none;
-  }
 }
 
 .empty-page {
