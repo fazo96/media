@@ -2,9 +2,9 @@
 
 import { createContext, type RefObject, useCallback, useContext, useEffect, useRef, useState } from "react";
 import type { Video } from "@/lib/types";
+import { thumbUrl } from "@/lib/urls";
 import { type Start, usePlayback } from "./usePlayback";
 import { useMediaSession } from "./useMediaSession";
-import { thumbUrl } from "./VideoCard";
 
 // The now playing layer (docs/pages.md#now-playing): one <audio> in the root
 // layout, which in-app navigation never unmounts, so a listen mode track (and
@@ -54,8 +54,6 @@ export function useNowPlaying(): NowPlaying {
   if (!now) throw new Error("useNowPlaying outside NowPlayingProvider");
   return now;
 }
-
-export const hrefOf = (v: Video, queue: Queue | null) => (queue ? `/v/${v.id}?list=${queue.id}` : `/v/${v.id}`);
 
 export function NowPlayingProvider({ children }: { children: React.ReactNode }) {
   const audio = useRef<HTMLAudioElement>(null);

@@ -2,7 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, ApiError } from "@/lib/api";
+import { api, errorMessage } from "@/lib/api";
 import SettingsHead from "./SettingsHead";
 import { IconLock } from "./icons";
 
@@ -15,7 +15,7 @@ async function post(body: object): Promise<string | null> {
     await api("/api/auth", { method: "POST", json: body });
     return null;
   } catch (err) {
-    return err instanceof ApiError ? err.message : "Can’t reach the server. Check your connection.";
+    return errorMessage(err, "Can’t reach the server. Check your connection.");
   }
 }
 

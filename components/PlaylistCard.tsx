@@ -1,19 +1,14 @@
 "use client";
 
 import Link from "next/link";
-import type { Playlist, Video } from "@/lib/types";
+import { playlistCount } from "@/lib/format";
+import { inLibrary, type Playlist, type Video } from "@/lib/types";
+import { thumbUrl } from "@/lib/urls";
 import { IconPlaylist } from "./icons";
-import { thumbUrl } from "./VideoCard";
-
-/** How many of a playlist's videos are in the library, said briefly. */
-export function playlistCount(p: Playlist, present: number) {
-  const missing = p.items.length - present;
-  return [`${present} ${present === 1 ? "video" : "videos"}`, missing > 0 ? `${missing} not downloaded` : null].filter(Boolean).join(" · ");
-}
 
 /** A playlist on the library page: its first stills, its name, how long it is. */
 export default function PlaylistCard({ playlist: p, byId }: { playlist: Playlist; byId: Map<string, Video> }) {
-  const present = p.items.map((id) => byId.get(id)).filter((v): v is Video => v !== undefined);
+  const present = inLibrary(p.items, byId);
   const stills = present.filter((v) => v.hasThumb).slice(0, 4);
   return (
     <article className="card" data-playlist={p.id}>
@@ -27,7 +22,7 @@ export default function PlaylistCard({ playlist: p, byId }: { playlist: Playlist
         <h2 className="card-title">
           <Link href={`/p/${p.id}`}>{p.title}</Link>
         </h2>
-        <p className="card-meta">{[p.youtubePlaylistId ? (p.channel ?? "YouTube") : null, playlistCount(p, present.length)].filter(Boolean).join(" · ")}</p>
+        <p className="card-meta">{[p.youtubePlaylistId ? (p.channel ?? "YouTube") : null, playlistCount(p.items.length, present.length)].filter(Boolean).join(" · ")}</p>
       </div>
     </article>
   );

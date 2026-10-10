@@ -2,8 +2,10 @@
 
 import Link from "next/link";
 import { formatDuration, formatViews } from "@/lib/format";
-import type { Job, PlaylistResult, SearchResult, SearchResults as Results, Video } from "@/lib/types";
+import { isActive, type Job, type PlaylistResult, type SearchResult, type SearchResults as Results, type Video } from "@/lib/types";
+import { playerHref } from "@/lib/urls";
 import { IconClose, IconPlaylist, IconPlus } from "./icons";
+import YtThumb from "./YtThumb";
 
 export type Search = { query: string; results: Results | null; error?: string };
 
@@ -16,23 +18,21 @@ type Props = {
   onClose: () => void;
 };
 
-const ACTIVE = new Set(["queued", "downloading", "processing"]);
-
 /** A video on YouTube: in the library already (it plays), downloading, or a click away. */
 export function ResultCard({ result: r, videos, jobs, onAdd }: { result: SearchResult; videos: Video[]; jobs: Job[]; onAdd: (ytId: string) => void }) {
   const video = videos.find((v) => v.youtubeId === r.youtubeId);
-  const job = jobs.find((j) => j.youtubeId === r.youtubeId && ACTIVE.has(j.state));
+  const job = jobs.find((j) => j.youtubeId === r.youtubeId && isActive(j));
   const meta = [r.channel, r.views !== undefined ? formatViews(r.views) : null].filter(Boolean).join(" · ");
   const thumb = (
     <>
-      <img src={`https://i.ytimg.com/vi/${r.youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+      <YtThumb id={r.youtubeId} />
       <span className="duration">{formatDuration(r.duration)}</span>
     </>
   );
   return (
     <article className="card" data-result={r.youtubeId}>
       {video ? (
-        <Link href={`/v/${video.id}`} className="thumb" aria-label={`Play ${video.title}`}>
+        <Link href={playerHref(video.id)} className="thumb" aria-label={`Play ${video.title}`}>
           {thumb}
         </Link>
       ) : (

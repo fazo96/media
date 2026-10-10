@@ -5,10 +5,10 @@ import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { abortOf, addJob, isActive, jobEnded, listJobs } from "./downloads";
+import { abortOf, addJob, jobEnded, listJobs } from "./downloads";
 import { addVideo, incomingDir, listVideos } from "./library";
 import { createPlaylist, findTorrentPlaylist, updatePlaylist } from "./playlists";
-import type { Job, Torrent, TorrentFile, TorrentImport, Video } from "./types";
+import { isActive, type Job, type Torrent, type TorrentFile, type TorrentImport, type Video } from "./types";
 
 // Importing from Transmission (docs/transmission.md): its RPC lists the
 // torrents' video files; an import copies the chosen ones into the library

@@ -2,15 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { ApiError, importTorrent, listTorrents } from "@/lib/api";
+import { errorMessage, importTorrent, listTorrents } from "@/lib/api";
 import { formatSize } from "@/lib/format";
 import { local } from "@/lib/storage";
-import type { Job, Torrent, TorrentFile } from "@/lib/types";
+import { isActive, type Job, type Torrent, type TorrentFile } from "@/lib/types";
+import { playerHref } from "@/lib/urls";
 import { IconClose, IconRefresh, IconSearch } from "./icons";
 
 const REMOVE_KEY = "media:transmission-remove";
-const ACTIVE = new Set(["queued", "downloading", "processing"]);
-
 const fileName = (f: TorrentFile) => f.name.split("/").pop() ?? f.name;
 const percent = (n: number) => `${Math.floor(n * 100)}%`;
 
@@ -42,12 +41,12 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
       setTorrents((await listTorrents()).torrents);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+      setError(errorMessage(err));
     }
   }, []);
 
   // Read again whenever an import starts or ends: its files are in the library, its torrent maybe gone.
-  const importing = useMemo(() => new Set(jobs.filter((j) => j.torrent && ACTIVE.has(j.state)).map((j) => j.torrent?.hash)), [jobs]);
+  const importing = useMemo(() => new Set(jobs.filter((j) => j.torrent && isActive(j)).map((j) => j.torrent?.hash)), [jobs]);
   const importingKey = [...importing].sort().join(",");
   useEffect(() => {
     void load();
@@ -82,7 +81,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
       onJob(job);
       setError(null);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+      setError(errorMessage(err));
     } finally {
       setBusy(null);
     }
@@ -167,7 +166,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
                       </span>
                       <span className="torrent-file-size">{formatSize(f.size)}</span>
                       {f.videoId ? (
-                        <Link href={`/v/${f.videoId}`} className="torrent-file-state">
+                        <Link href={playerHref(f.videoId)} className="torrent-file-state">
                           In the library
                         </Link>
                       ) : f.done < 1 ? (

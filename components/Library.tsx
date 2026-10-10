@@ -3,9 +3,23 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, createPlaylist, downloadPlaylist, importTorrent, inspectPlaylist, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
+import {
+  createPlaylist,
+  dismissJob as dismiss,
+  downloadPlaylist,
+  errorMessage,
+  importTorrent,
+  inspectPlaylist,
+  listJobs,
+  listPlaylists,
+  listVideos,
+  requestYoutube,
+  searchYoutube,
+  uploadVideo,
+} from "@/lib/api";
 import { local } from "@/lib/storage";
-import type { DiskUsage, Job, Playlist, Video } from "@/lib/types";
+import { isSort, SORTS, type Sort, sorted } from "@/lib/sort";
+import { type DiskUsage, isActive, type Job, type Playlist, type Video } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
 import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
 import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
@@ -19,32 +33,10 @@ import ThemeButton from "./ThemeButton";
 import TransmissionPanel from "./TransmissionPanel";
 import VideoCard from "./VideoCard";
 
-type Sort = "recent" | "most" | "added" | "title";
-const SORTS: { key: Sort; label: string }[] = [
-  { key: "recent", label: "Recently watched" },
-  { key: "most", label: "Most watched" },
-  { key: "added", label: "Recently added" },
-  { key: "title", label: "A–Z" },
-];
 const SORT_KEY = "media:sort";
-
-const isSort = (s: string | null): s is Sort => SORTS.some((o) => o.key === s);
-
-function sorted(videos: Video[], sort: Sort): Video[] {
-  const by: Record<Sort, (a: Video, b: Video) => number> = {
-    // Never-watched videos fall back to when they were added, so new ones show up top.
-    recent: (a, b) => (b.lastPlayedAt ?? b.addedAt) - (a.lastPlayedAt ?? a.addedAt),
-    most: (a, b) => b.playCount - a.playCount || (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0),
-    added: (a, b) => b.addedAt - a.addedAt,
-    title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true }),
-  };
-  return [...videos].sort(by[sort]);
-}
 
 /** What a file chooser or a drop takes when the browser gives no type: videos, and music. */
 const MEDIA_EXT = /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp|mp3|m4a|m4b|flac|ogg|oga|opus|wav|aac|wma)$/i;
-
-const ACTIVE = new Set(["queued", "downloading", "processing"]);
 
 type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
@@ -80,7 +72,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
 
   const refresh = useCallback(async () => {
     try {
-      const [v, p] = await Promise.all([api<Video[]>("/api/videos"), api<Playlist[]>("/api/playlists")]);
+      const [v, p] = await Promise.all([listVideos(), listPlaylists()]);
       setVideos(v);
       setPlaylists(p);
     } catch {}
@@ -93,7 +85,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   useEffect(() => {
     const catchUp = () => {
       void refresh();
-      void api<Job[]>("/api/jobs")
+      void listJobs()
         .then(setJobs)
         .catch(() => {});
     };
@@ -104,13 +96,13 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   }, [refresh]);
 
   // While something downloads, follow it; when one finishes, its video joins the list.
-  const anyActive = jobs.some((j) => ACTIVE.has(j.state));
+  const anyActive = jobs.some((j) => isActive(j));
   useEffect(() => {
     if (!anyActive) return;
     let stop = false;
     const tick = async () => {
       try {
-        const next = await api<Job[]>("/api/jobs");
+        const next = await listJobs();
         if (stop) return;
         setJobs((prev) => {
           const finished = next.some((j) => j.state === "done" && prev.find((p) => p.id === j.id)?.state !== "done");
@@ -135,7 +127,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     if (!doneIds) return;
     const ids = doneIds.split(",");
     const timer = setTimeout(() => {
-      for (const id of ids) void api(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => {});
+      for (const id of ids) void dismiss(id).catch(() => {});
       setJobs((prev) => prev.filter((j) => !ids.includes(j.id)));
     }, 2500);
     return () => clearTimeout(timer);
@@ -156,7 +148,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       setPreview({ listId, playlist });
     } catch (err) {
       if (abort.signal.aborted) return;
-      setPreview({ listId, playlist: null, error: err instanceof ApiError ? err.message : "Can’t reach the server." });
+      setPreview({ listId, playlist: null, error: errorMessage(err) });
     }
   }, []);
   const closePreview = () => {
@@ -189,7 +181,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
         }
         return true;
       } catch (err) {
-        say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+        say(errorMessage(err), true);
         return false;
       }
     },
@@ -211,7 +203,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
         action: { label: "Open the playlist", run: () => router.push(`/p/${playlist.id}`) },
       });
     } catch (err) {
-      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+      say(errorMessage(err), true);
     }
   };
 
@@ -223,7 +215,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       keepPlaylist(await createPlaylist(title));
       setNewList(null);
     } catch (err) {
-      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+      say(errorMessage(err), true);
     }
   };
 
@@ -240,7 +232,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       setSearch({ query, results });
     } catch (err) {
       if (abort.signal.aborted) return;
-      setSearch({ query, results: null, error: err instanceof ApiError ? err.message : "Can’t reach the server." });
+      setSearch({ query, results: null, error: errorMessage(err) });
     }
   };
   const closeSearch = () => {
@@ -280,7 +272,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
             setVideos((prev) => [video, ...prev.filter((v) => v.id !== video.id)]);
             setUploads((prev) => prev.filter((u) => u.key !== up.key));
           } catch (err) {
-            set({ state: "failed", error: err instanceof ApiError ? err.message : "Upload interrupted." });
+            set({ state: "failed", error: errorMessage(err, "Upload interrupted.") });
           }
         });
       }
@@ -371,12 +363,12 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   const replace = (v: Video) => setVideos((prev) => prev.map((p) => (p.id === v.id ? v : p)));
   const dismissJob = async (id: string) => {
     setJobs((prev) => prev.filter((j) => j.id !== id));
-    await api(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => {});
+    await dismiss(id).catch(() => {});
   };
   const cancelJobs = async (list: Job[]) => {
     const ids = new Set(list.map((j) => j.id));
     setJobs((prev) => prev.filter((j) => !ids.has(j.id)));
-    await Promise.all(list.map((j) => api(`/api/jobs/${j.id}`, { method: "DELETE" }).catch(() => {})));
+    await Promise.all(list.map((j) => dismiss(j.id).catch(() => {})));
   };
   const keepJob = (job: Job) => setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
   const retryJob = async (j: Job) => {
@@ -389,7 +381,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     try {
       keepJob((await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job);
     } catch (err) {
-      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+      say(errorMessage(err), true);
     }
   };
 

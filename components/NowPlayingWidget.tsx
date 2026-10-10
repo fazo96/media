@@ -3,9 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { isAudio } from "@/lib/types";
+import { playerHref, thumbUrl } from "@/lib/urls";
 import { IconClose, IconNext, IconPause, IconPlay, IconStill } from "./icons";
-import { hrefOf, useNowPlaying } from "./NowPlaying";
-import { thumbUrl } from "./VideoCard";
+import { useNowPlaying } from "./NowPlaying";
 
 /**
  * The top bar's now playing (docs/pages.md#now-playing): the track's still and
@@ -20,7 +20,7 @@ export default function NowPlayingWidget() {
   const progress = now.duration > 0 ? Math.min(1, now.time / now.duration) : 0;
   return (
     <section className="now-playing" aria-label="Now playing">
-      <Link href={hrefOf(track, queue)} className="now-playing-track" title={queue ? `${track.title} · ${queue.title}` : track.title}>
+      <Link href={playerHref(track.id, queue?.id)} className="now-playing-track" title={queue ? `${track.title} · ${queue.title}` : track.title}>
         <span className="now-playing-thumb">{track.hasThumb ? <img src={thumbUrl(track)} alt="" /> : <IconStill audio={isAudio(track)} />}</span>
         <span className="now-playing-title">{track.title}</span>
       </Link>

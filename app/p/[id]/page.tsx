@@ -6,6 +6,7 @@ import { isValidId } from "@/lib/ids";
 import { listVideos } from "@/lib/library";
 import { getPlaylist } from "@/lib/playlists";
 import { hasSession, requirePageSession } from "@/lib/session";
+import { inLibrary } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,6 @@ export default async function Page({ params }: Props) {
   await requirePageSession(`/p/${id}`);
   const playlist = isValidId(id) ? await getPlaylist(id) : null;
   if (!playlist) notFound();
-  const byId = new Map((await listVideos()).map((v) => [v.id, v]));
-  const videos = playlist.items.flatMap((i) => byId.get(i) ?? []);
+  const videos = inLibrary(playlist.items, new Map((await listVideos()).map((v) => [v.id, v])));
   return <PlaylistView key={playlist.id} initialPlaylist={playlist} initialVideos={videos} initialJobs={listJobs()} />;
 }

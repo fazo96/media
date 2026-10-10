@@ -31,6 +31,9 @@ export async function api<T = unknown>(path: string, { json, ...init }: Init = {
   return (await res.json()) as T;
 }
 
+/** What to tell someone a request failed with: the server's message, or that it couldn't be reached. */
+export const errorMessage = (err: unknown, offline = "Can’t reach the server.") => (err instanceof ApiError ? err.message : offline);
+
 /** A DELETE that's done when it succeeds or the thing is already gone (404). */
 export async function apiDelete(path: string): Promise<void> {
   try {
@@ -120,3 +123,26 @@ export const listTorrents = () => api<{ torrents: Torrent[] }>("/api/transmissio
 /** Import a torrent's finished videos (`files`: indexes), then maybe remove it from Transmission. */
 export const importTorrent = (hash: string, files: number[], remove: boolean, playlist = false) =>
   api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove, playlist } });
+
+/** Every video in the library. */
+export const listVideos = () => api<Video[]>("/api/videos");
+
+/** Rename a video. */
+export const renameVideo = (id: string, title: string) => api<Video>(`/api/videos/${id}`, { method: "PATCH", json: { title } });
+
+/** Move a video to the trash. */
+export const deleteVideo = (id: string) => apiDelete(`/api/videos/${id}`);
+
+/** Every playlist. */
+export const listPlaylists = () => api<Playlist[]>("/api/playlists");
+
+export const getPlaylist = (id: string) => api<Playlist>(`/api/playlists/${id}`);
+
+/** Move a playlist to the trash (its videos stay). */
+export const deletePlaylist = (id: string) => apiDelete(`/api/playlists/${id}`);
+
+/** The downloads and imports, under way or ended. */
+export const listJobs = () => api<Job[]>("/api/jobs");
+
+/** Cancel a job under way, or forget one that ended. */
+export const dismissJob = (id: string) => apiDelete(`/api/jobs/${id}`);

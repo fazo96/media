@@ -4,8 +4,9 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { setListen } from "@/lib/api";
-import { formatAgo, formatDuration, formatHeight, formatSize } from "@/lib/format";
+import { formatAgo, formatDuration, formatHeight, formatSize, playsLabel, sourceLabel } from "@/lib/format";
 import { isAudio, type Video } from "@/lib/types";
+import { playerHref, thumbUrl } from "@/lib/urls";
 import { IconBack, IconCast, IconExternal, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconStill, IconWarn } from "./icons";
 import { type NowPlaying, type Queue, useNowPlaying } from "./NowPlaying";
 import NowPlayingWidget from "./NowPlayingWidget";
@@ -14,7 +15,6 @@ import ThemeButton from "./ThemeButton";
 import { useCast } from "./useCast";
 import { useMediaSession } from "./useMediaSession";
 import { type Start, usePlayback } from "./usePlayback";
-import { thumbUrl } from "./VideoCard";
 
 /** In a playlist, how long "Up next" waits before playing it. */
 const UP_NEXT_S = 5;
@@ -54,7 +54,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   const index = playlist ? playlist.videos.findIndex((o) => o.id === v.id) : -1;
   const next = playlist?.videos[index + 1];
   const prev = index > 0 ? playlist?.videos[index - 1] : undefined;
-  const hrefOf = (o: Video) => (playlist ? `/v/${o.id}?list=${playlist.id}` : `/v/${o.id}`);
+  const hrefOf = (o: Video) => playerHref(o.id, playlist?.id);
   const [upNext, setUpNext] = useState<number | null>(null);
   // The listeners below are set up once per video, so they read these through refs.
   const nav = useRef({ next: "", prev: "" });
@@ -125,7 +125,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     }
     const t = now.track;
     if (t?.id === v.id) followed.current = true;
-    else if (followed.current && t) router.push(now.queue ? `/v/${t.id}?list=${now.queue.id}` : `/v/${t.id}`);
+    else if (followed.current && t) router.push(playerHref(t.id, now.queue?.id));
   }, [listen, now.track?.id, v.id, router]);
 
   // The page's video is up: the notification is its, and the layer playing pauses it.
@@ -336,7 +336,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             <p className="watch-meta">
               {v.source === "youtube" ? (v.channel ?? "YouTube") : music && v.channel ? v.channel : (v.originalName?.split("/").pop() ?? "File")}
               {" · "}
-              {v.playCount ? `${music ? "played" : "watched"} ${v.playCount}×` : music ? "not played yet" : "not watched yet"}
+              {playsLabel(v)}
               {v.lastPlayedAt ? ` · last ${formatAgo(v.lastPlayedAt)}` : ""}
               {" · added "}
               {formatAgo(v.addedAt)}
@@ -409,7 +409,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                     </span>
                     <span className="other-text">
                       <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{o.id === v.id ? "Playing" : o.source === "youtube" ? (o.channel ?? "YouTube") : o.source === "torrent" ? "Torrent" : "File"}</span>
+                      <span className="other-meta">{o.id === v.id ? "Playing" : sourceLabel(o)}</span>
                     </span>
                   </Link>
                 </li>
@@ -424,14 +424,14 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             <ul>
               {others.map((o) => (
                 <li key={o.id}>
-                  <Link href={`/v/${o.id}`} className="other">
+                  <Link href={playerHref(o.id)} className="other">
                     <span className="other-thumb">
                       {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
                       {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
                     </span>
                     <span className="other-text">
                       <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{o.source === "youtube" ? (o.channel ?? "YouTube") : o.source === "torrent" ? "Torrent" : "File"}</span>
+                      <span className="other-meta">{sourceLabel(o)}</span>
                     </span>
                   </Link>
                 </li>

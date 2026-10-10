@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { api, ApiError, apiDelete } from "@/lib/api";
-import { formatAgo, formatDuration } from "@/lib/format";
+import { deleteVideo, errorMessage, renameVideo } from "@/lib/api";
+import { formatAgo, formatDuration, playsLabel, sourceLabel } from "@/lib/format";
 import { isAudio, type Playlist, type Video } from "@/lib/types";
+import { playerHref, thumbUrl } from "@/lib/urls";
 import { IconEdit, IconExternal, IconMore, IconPlaylist, IconRefresh, IconStill, IconTrash, IconWarn } from "./icons";
 import PlaylistPicker from "./PlaylistPicker";
 
@@ -16,8 +17,6 @@ type Props = {
   playlists: Playlist[];
   onPlaylistChanged: (p: Playlist) => void;
 };
-
-export const thumbUrl = (v: Video) => `/api/videos/${v.id}/thumb?v=${v.addedAt}`;
 
 /** One video in the grid: its still, how far it was watched, and a menu. */
 export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload, playlists, onPlaylistChanged }: Props) {
@@ -43,32 +42,26 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
   }, [menu]);
 
   const watched = v.duration > 0 && v.position > 0 ? Math.min(1, v.position / v.duration) : 0;
-  const meta = [
-    v.source === "youtube" ? (v.channel ?? "YouTube") : isAudio(v) && v.channel ? v.channel : v.source === "torrent" ? "Torrent" : "File",
-    v.playCount ? `${isAudio(v) ? "played" : "watched"} ${v.playCount}×` : isAudio(v) ? "not played yet" : "not watched yet",
-    v.lastPlayedAt ? formatAgo(v.lastPlayedAt) : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
+  const meta = [sourceLabel(v), playsLabel(v), v.lastPlayedAt ? formatAgo(v.lastPlayedAt) : null].filter(Boolean).join(" · ");
 
   const rename = async (e: React.FormEvent) => {
     e.preventDefault();
     const t = title.trim();
     if (!t || t === v.title) return setMode("idle");
     try {
-      onChanged(await api<Video>(`/api/videos/${v.id}`, { method: "PATCH", json: { title: t } }));
+      onChanged(await renameVideo(v.id, t));
       setMode("idle");
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+      setError(errorMessage(err));
     }
   };
 
   const remove = async () => {
     try {
-      await apiDelete(`/api/videos/${v.id}`);
+      await deleteVideo(v.id);
       onRemoved(v.id);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+      setError(errorMessage(err));
     }
   };
 
@@ -79,7 +72,7 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
 
   return (
     <article className="card" ref={ref} data-video={v.id}>
-      <Link href={`/v/${v.id}`} className={`thumb ${isAudio(v) ? "is-music" : ""}`} aria-label={`Play ${v.title}`}>
+      <Link href={playerHref(v.id)} className={`thumb ${isAudio(v) ? "is-music" : ""}`} aria-label={`Play ${v.title}`}>
         {v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} />}
         {v.duration > 0 && <span className="duration">{formatDuration(v.duration)}</span>}
         {!v.playable && (
@@ -107,7 +100,7 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
           </form>
         ) : (
           <h2 className="card-title">
-            <Link href={`/v/${v.id}`}>{v.title}</Link>
+            <Link href={playerHref(v.id)}>{v.title}</Link>
           </h2>
         )}
         {mode === "delete" ? (

@@ -6,7 +6,7 @@ import { youtubeVideoId } from "./ids";
 import { addVideo, getVideo, incomingDir } from "./library";
 import { createPlaylist, findYoutubePlaylist, updatePlaylist } from "./playlists";
 import { run } from "./tools";
-import type { Job, Playlist, PlaylistResult, SearchResult, SearchResults, YoutubePlaylist } from "./types";
+import { isActive, type Job, type Playlist, type PlaylistResult, type SearchResult, type SearchResults, type YoutubePlaylist } from "./types";
 import { parsePlaylist, parseYoutube, playlistUrl, youtubeUrl } from "./youtube";
 
 // YouTube downloads (docs/downloads.md): a queue in memory, one yt-dlp at a
@@ -46,9 +46,6 @@ const state: State = (g.__mediaDownloads ??= { jobs: new Map(), aborts: new Map(
 
 export const listJobs = () => [...state.jobs.values()].sort((a, b) => a.createdAt - b.createdAt);
 export const getJob = (id: string) => state.jobs.get(id) ?? null;
-
-/** Queued or under way. */
-export const isActive = (j: Job) => j.state === "queued" || j.state === "downloading" || j.state === "processing";
 
 /**
  * List a job that another queue runs (Transmission's imports, lib/transmission.ts):

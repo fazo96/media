@@ -47,7 +47,13 @@ export const isAudio = (v: { videoCodec?: string }) => !v.videoCodec;
 export const listenMime = (v: Pick<Video, "videoCodec" | "mime" | "audioCodec">) =>
   isAudio(v) ? v.mime : v.audioCodec === "vorbis" ? "audio/webm" : "audio/mp4";
 
+/** A playlist's videos that are in the library (`byId`), in order. */
+export const inLibrary = <V extends { id: string }>(items: string[], byId: Map<string, V>): V[] => items.flatMap((id) => byId.get(id) ?? []);
+
 export type JobState = "queued" | "downloading" | "processing" | "done" | "failed";
+
+/** Queued or under way. */
+export const isActive = (j: Pick<Job, "state">) => j.state === "queued" || j.state === "downloading" || j.state === "processing";
 
 /** A YouTube download or an import from Transmission, as GET /api/jobs lists it. */
 export type Job = {

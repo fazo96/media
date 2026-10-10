@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
-import { ApiError, createShare, listShares, revokeShare, shareUrl } from "@/lib/api";
+import { createShare, errorMessage, listShares, revokeShare, shareUrl } from "@/lib/api";
 import { formatAgo, formatIn } from "@/lib/format";
 import type { SharedLink, ShareExpiry, ShareTarget } from "@/lib/types";
 import { IconCheck, IconLink, IconShare, IconTrash } from "./icons";
@@ -13,8 +13,6 @@ const EXPIRIES: { key: ShareExpiry; label: string }[] = [
   { key: "1m", label: "1 month" },
   { key: "never", label: "Never" },
 ];
-
-const message = (err: unknown) => (err instanceof ApiError ? err.message : "Can’t reach the server.");
 
 /** One link: its address to copy or send on, how long it lasts, and revoke. `withTitle`: say which video or playlist (in Settings). */
 export function ShareLinkRow({ link, onRevoked, withTitle = false }: { link: SharedLink; onRevoked: () => void; withTitle?: boolean }) {
@@ -40,7 +38,7 @@ export function ShareLinkRow({ link, onRevoked, withTitle = false }: { link: Sha
       await revokeShare(link.token);
       onRevoked();
     } catch (err) {
-      setError(message(err));
+      setError(errorMessage(err));
       setBusy(false);
     }
   };
@@ -97,7 +95,7 @@ export default function ShareButton({ of, title, small = true }: ButtonProps) {
 
   useEffect(() => {
     if (!open) return;
-    listShares(target.current).then(setLinks, (err) => setError(message(err)));
+    listShares(target.current).then(setLinks, (err) => setError(errorMessage(err)));
   }, [open, key]);
 
   const create = async () => {
@@ -107,7 +105,7 @@ export default function ShareButton({ of, title, small = true }: ButtonProps) {
       const s = await createShare(of, expires);
       setLinks((ls) => [{ ...s, title }, ...(ls ?? [])]);
     } catch (err) {
-      setError(message(err));
+      setError(errorMessage(err));
     } finally {
       setBusy(false);
     }

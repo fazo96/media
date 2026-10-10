@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ApiError, changePlaylist, createPlaylist } from "@/lib/api";
+import { changePlaylist, createPlaylist, errorMessage } from "@/lib/api";
 import type { Playlist } from "@/lib/types";
 import { IconCheck, IconPlus } from "./icons";
 
@@ -23,7 +23,7 @@ export default function PlaylistPicker({ videoId, playlists, onChanged, onError 
     try {
       await fn();
     } catch (err) {
-      onError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+      onError(errorMessage(err));
     } finally {
       setBusy(false);
     }

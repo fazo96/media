@@ -5,6 +5,9 @@ import { isValidId } from "@/lib/ids";
 import { getVideo, listVideos } from "@/lib/library";
 import { getPlaylist } from "@/lib/playlists";
 import { hasSession, requirePageSession } from "@/lib/session";
+import { sorted } from "@/lib/sort";
+import { inLibrary } from "@/lib/types";
+import { playerHref } from "@/lib/urls";
 
 export const dynamic = "force-dynamic";
 
@@ -21,21 +24,17 @@ export default async function Page({ params, searchParams }: Props) {
   const { id } = await params;
   const { list } = await searchParams;
   const listId = typeof list === "string" && isValidId(list) ? list : null;
-  await requirePageSession(listId ? `/v/${id}?list=${listId}` : `/v/${id}`);
+  await requirePageSession(playerHref(id, listId));
   const video = isValidId(id) ? await getVideo(id) : null;
   if (!video) notFound();
   const all = await listVideos();
   // Played from a playlist (?list=): its videos, in order, play one after another.
   const playlist = listId ? await getPlaylist(listId) : null;
   if (playlist?.items.includes(id)) {
-    const byId = new Map(all.map((v) => [v.id, v]));
-    const queue = playlist.items.flatMap((i) => byId.get(i) ?? []);
+    const queue = inLibrary(playlist.items, new Map(all.map((v) => [v.id, v])));
     return <Player key={`${video.id}-${playlist.id}`} video={video} others={[]} playlist={{ id: playlist.id, title: playlist.title, videos: queue }} />;
   }
   // Beside the player: what else was watched lately.
-  const others = all
-    .filter((v) => v.id !== id)
-    .sort((a, b) => (b.lastPlayedAt ?? b.addedAt) - (a.lastPlayedAt ?? a.addedAt))
-    .slice(0, 12);
+  const others = sorted(all.filter((v) => v.id !== id), "recent").slice(0, 12);
   return <Player key={video.id} video={video} others={others} />;
 }

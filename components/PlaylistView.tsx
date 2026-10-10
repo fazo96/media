@@ -3,19 +3,17 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { api, ApiError, apiDelete, changePlaylist, requestYoutube } from "@/lib/api";
-import { formatDuration } from "@/lib/format";
+import { ApiError, changePlaylist, deletePlaylist, errorMessage, getPlaylist, listJobs, listVideos, requestYoutube } from "@/lib/api";
+import { formatDuration, playlistCount, sourceLabel } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
-import { isAudio, type Job, type Playlist, type Video } from "@/lib/types";
+import { inLibrary, isActive, isAudio, type Job, type Playlist, type Video } from "@/lib/types";
+import { playerHref, thumbUrl } from "@/lib/urls";
 import { youtubeUrl } from "@/lib/youtube";
 import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconStill, IconTrash } from "./icons";
-import { playlistCount } from "./PlaylistCard";
 import ShareButton from "./ShareLinks";
 import NowPlayingWidget from "./NowPlayingWidget";
 import ThemeButton from "./ThemeButton";
-import { thumbUrl } from "./VideoCard";
-
-const ACTIVE = new Set(["queued", "downloading", "processing"]);
+import YtThumb from "./YtThumb";
 
 type Props = { initialPlaylist: Playlist; initialVideos: Video[]; initialJobs: Job[] };
 
@@ -28,19 +26,19 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
   const [title, setTitle] = useState(p.title);
   const [error, setError] = useState<string | null>(null);
-  const fail = (err: unknown) => setError(err instanceof ApiError ? err.message : "Can’t reach the server.");
+  const fail = (err: unknown) => setError(errorMessage(err));
 
   const byId = new Map(videos.map((v) => [v.id, v]));
-  const present = p.items.flatMap((id) => byId.get(id) ?? []);
-  const jobFor = (ytId: string | null) => (ytId ? jobs.find((j) => j.youtubeId === ytId && (ACTIVE.has(j.state) || j.state === "failed")) : undefined);
+  const present = inLibrary(p.items, byId);
+  const jobFor = (ytId: string | null) => (ytId ? jobs.find((j) => j.youtubeId === ytId && (isActive(j) || j.state === "failed")) : undefined);
 
   // Back from the player brings this page back as it was left (see Library):
   // catch up when it mounts or shows again. Gone meanwhile: to the library.
   useEffect(() => {
     const catchUp = async () => {
       try {
-        const jobsNow = await api<Job[]>("/api/jobs");
-        const [list, all] = await Promise.all([api<Playlist>(`/api/playlists/${initialPlaylist.id}`), api<Video[]>("/api/videos")]);
+        const jobsNow = await listJobs();
+        const [list, all] = await Promise.all([getPlaylist(initialPlaylist.id), listVideos()]);
         setJobs(jobsNow);
         setP(list);
         setVideos(all);
@@ -57,7 +55,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   // While any of its videos downloads, follow along; one that lands joins the list.
   const following = p.items.some((id) => {
     const j = jobFor(youtubeIdFromVideoId(id));
-    return j && ACTIVE.has(j.state);
+    return j && isActive(j);
   });
   useEffect(() => {
     if (!following) return;
@@ -65,8 +63,8 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     const timer = setInterval(async () => {
       try {
         // Jobs first: a job seen done has its video in the list fetched after.
-        const nextJobs = await api<Job[]>("/api/jobs");
-        const all = await api<Video[]>("/api/videos");
+        const nextJobs = await listJobs();
+        const all = await listVideos();
         if (stop) return;
         setJobs(nextJobs);
         setVideos(all);
@@ -111,7 +109,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
 
   const destroy = async () => {
     try {
-      await apiDelete(`/api/playlists/${p.id}`);
+      await deletePlaylist(p.id);
       router.push("/");
     } catch (err) {
       fail(err);
@@ -132,7 +130,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     }
   };
 
-  const playHref = (v: Video) => `/v/${v.id}?list=${p.id}`;
+  const playHref = (v: Video) => playerHref(v.id, p.id);
 
   return (
     <div className="app">
@@ -164,7 +162,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
             <h1 className="shelf-title">{p.title}</h1>
           )}
           <p className="card-meta">
-            {[p.youtubePlaylistId ? (p.channel ?? "YouTube") : null, playlistCount(p, present.length)].filter(Boolean).join(" · ")}
+            {[p.youtubePlaylistId ? (p.channel ?? "YouTube") : null, playlistCount(p.items.length, present.length)].filter(Boolean).join(" · ")}
             {p.url && (
               <>
                 {" · "}
@@ -237,9 +235,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
               const ytId = youtubeIdFromVideoId(id);
               const job = jobFor(ytId);
               const status = v
-                ? v.source === "youtube"
-                  ? (v.channel ?? "YouTube")
-                  : "File"
+                ? sourceLabel(v)
                 : job
                   ? job.state === "failed"
                     ? (job.error ?? "Failed")
@@ -251,7 +247,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                     : "Deleted from the library";
               const thumb = (
                 <span className="other-thumb">
-                  {v ? v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} /> : ytId ? <img src={`https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} /> : <IconFilm />}
+                  {v ? v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} /> : ytId ? <YtThumb id={ytId} /> : <IconFilm />}
                   {v && v.duration > 0 && <span className="duration">{formatDuration(v.duration)}</span>}
                 </span>
               );

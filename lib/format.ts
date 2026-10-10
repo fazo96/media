@@ -1,4 +1,4 @@
-// How numbers read on the page. Imports nothing, so tests can load it.
+// How numbers and labels read on the page. Imports nothing, so tests can load it.
 
 /** 75 → "1:15", 3725 → "1:02:05". */
 export function formatDuration(seconds: number): string {
@@ -58,3 +58,22 @@ export function formatIn(at: number, now = Date.now()): string {
 
 /** "1920×1080" → "1080p". */
 export const formatHeight = (height?: number) => (height ? `${height}p` : "");
+
+/** Where a video is from, on its card or row: its channel (music: its artist), or how it came in. */
+export function sourceLabel(v: { source: string; channel?: string; videoCodec?: string }): string {
+  if (v.source === "youtube") return v.channel ?? "YouTube";
+  if (!v.videoCodec && v.channel) return v.channel; // music: its artist
+  return v.source === "torrent" ? "Torrent" : "File";
+}
+
+/** How often it was played: "watched 3×", music "played 3×", or "not watched yet". */
+export function playsLabel(v: { playCount: number; videoCodec?: string }): string {
+  const verb = v.videoCodec ? "watched" : "played";
+  return v.playCount ? `${verb} ${v.playCount}×` : `not ${verb} yet`;
+}
+
+/** How many of a playlist's videos are in the library, said briefly. */
+export function playlistCount(items: number, present: number): string {
+  const missing = items - present;
+  return [`${present} ${present === 1 ? "video" : "videos"}`, missing > 0 ? `${missing} not downloaded` : null].filter(Boolean).join(" · ");
+}

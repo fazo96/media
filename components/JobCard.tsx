@@ -3,6 +3,7 @@
 import { formatSize } from "@/lib/format";
 import type { Job } from "@/lib/types";
 import { IconClose, IconDownload, IconRefresh, IconUpload, IconWarn } from "./icons";
+import YtThumb from "./YtThumb";
 
 export type Upload = { key: string; name: string; sent: number; state: "waiting" | "sending" | "processing" | "failed"; error?: string };
 
@@ -53,7 +54,7 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
         {t ? (
           <IconDownload />
         ) : (
-          <img src={`https://i.ytimg.com/vi/${job.youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+          <YtThumb id={job.youtubeId ?? ""} />
         )}
         {!failed && job.state !== "done" && <Progress value={job.state === "downloading" ? job.progress : null} />}
       </div>
@@ -82,7 +83,7 @@ export function QueuedPlaylistCard({ title, jobs, onCancel }: { title: string; j
   return (
     <article className="card card-pending" data-queued-playlist>
       <div className="thumb">
-        <img src={`https://i.ytimg.com/vi/${jobs[0].youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+        <YtThumb id={jobs[0].youtubeId ?? ""} />
         <Progress value={null} />
       </div>
       <div className="card-body">
