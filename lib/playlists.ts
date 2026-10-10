@@ -1,8 +1,8 @@
 import "server-only";
-import { mkdir, readdir, readFile, rename } from "node:fs/promises";
+import { mkdir, rename } from "node:fs/promises";
 import path from "node:path";
 import { refreshBrowse } from "./browse";
-import { createExclusive, serially, writeAtomic } from "./files";
+import { createExclusive, freeName, listJson, readJson, serially, unlessMissing, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { PLAYLISTS_DIR, TRASH_DIR } from "./paths";
 import type { Playlist } from "./types";
@@ -13,26 +13,13 @@ import type { Playlist } from "./types";
 
 const file = (id: string) => path.join(PLAYLISTS_DIR, `${id}.json`);
 
-async function read(id: string): Promise<Playlist | null> {
-  try {
-    return JSON.parse(await readFile(file(id), "utf8")) as Playlist;
-  } catch {
-    return null;
-  }
-}
+const read = (id: string) => readJson<Playlist>(file(id));
 
 export const getPlaylist = (id: string) => read(id);
 
 /** Every playlist, newest first. */
 export async function listPlaylists(): Promise<Playlist[]> {
-  let names: string[];
-  try {
-    names = await readdir(PLAYLISTS_DIR);
-  } catch {
-    return [];
-  }
-  const ids = names.filter((n) => n.endsWith(".json")).map((n) => n.slice(0, -5)).filter(isValidId);
-  const lists = (await Promise.all(ids.map(read))).filter((p): p is Playlist => p !== null);
+  const lists = await listJson<Playlist>(PLAYLISTS_DIR, isValidId);
   return lists.sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -58,15 +45,10 @@ export async function createPlaylist(details: New): Promise<Playlist> {
   await mkdir(PLAYLISTS_DIR, { recursive: true });
   const base = slugify(details.title);
   const now = Date.now();
-  for (let n = 1; n < 1000; n++) {
-    const id = n === 1 ? base : `${base.slice(0, 75)}-${n}`;
-    const playlist: Playlist = { ...details, id, items: [...new Set(details.items ?? [])], createdAt: now, updatedAt: now };
-    if (await createExclusive(file(id), JSON.stringify(playlist, null, 2))) {
-      refreshBrowse();
-      return playlist;
-    }
-  }
-  throw new Error("no free id");
+  const make = (id: string): Playlist => ({ ...details, id, items: [...new Set(details.items ?? [])], createdAt: now, updatedAt: now });
+  const id = await freeName(base, (id) => createExclusive(file(id), JSON.stringify(make(id), null, 2)));
+  refreshBrowse();
+  return make(id);
 }
 
 /** Change a playlist, one change at a time; null when there's no such playlist. */
@@ -86,13 +68,8 @@ export function updatePlaylist(id: string, change: (p: Playlist) => Playlist): P
 export async function trashPlaylist(id: string): Promise<boolean> {
   await mkdir(TRASH_DIR, { recursive: true });
   return serially(file(id), async () => {
-    try {
-      await rename(file(id), path.join(TRASH_DIR, `playlist-${id}.${Date.now()}.json`));
-      refreshBrowse();
-      return true;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-      throw err;
-    }
+    const trashed = await unlessMissing(() => rename(file(id), path.join(TRASH_DIR, `playlist-${id}.${Date.now()}.json`)));
+    if (trashed) refreshBrowse();
+    return trashed;
   });
 }

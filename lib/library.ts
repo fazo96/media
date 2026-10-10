@@ -1,9 +1,9 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
+import { mkdir, readdir, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { refreshBrowse } from "./browse";
-import { serially, writeAtomic } from "./files";
+import { freeName, readJson, serially, unlessMissing, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
 import { HttpError } from "./errors";
@@ -19,13 +19,7 @@ export const THUMB = "thumb.jpg";
 
 export const videoDir = (id: string) => path.join(VIDEOS_DIR, id);
 
-async function readMeta(id: string): Promise<Video | null> {
-  try {
-    return JSON.parse(await readFile(path.join(videoDir(id), META), "utf8")) as Video;
-  } catch {
-    return null;
-  }
-}
+const readMeta = (id: string) => readJson<Video>(path.join(videoDir(id), META));
 
 /** Every video, in no particular order (the page sorts). Folders without a readable meta.json are skipped. */
 export async function listVideos(): Promise<Video[]> {
@@ -67,14 +61,9 @@ export function withListen(v: Video, listen: boolean | undefined): Video {
 /** Move a video to the trash (a folder named for it and when). False when it's gone already. */
 export async function trashVideo(id: string): Promise<boolean> {
   await mkdir(TRASH_DIR, { recursive: true });
-  try {
-    await rename(videoDir(id), path.join(TRASH_DIR, `${id}.${Date.now()}`));
-    refreshBrowse();
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
+  const trashed = await unlessMissing(() => rename(videoDir(id), path.join(TRASH_DIR, `${id}.${Date.now()}`)));
+  if (trashed) refreshBrowse();
+  return trashed;
 }
 
 /** A fresh folder in INCOMING_DIR for an upload or download on its way in. */
@@ -84,22 +73,18 @@ export async function incomingDir(): Promise<string> {
   return dir;
 }
 
-
-/**
- * Claim a folder for a new video: `base`, else base-2, base-3…
- */
+/** Claim a folder for a new video: `base`, else base-2, base-3… (mkdir fails if it exists: the claim is atomic). */
 async function claim(base: string): Promise<string> {
   await mkdir(VIDEOS_DIR, { recursive: true });
-  for (let n = 1; n < 1000; n++) {
-    const id = n === 1 ? base : `${base.slice(0, 75)}-${n}`;
-    try {
-      await mkdir(videoDir(id)); // fails if it exists: the claim is atomic
-      return id;
-    } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== "EEXIST") throw err;
-    }
-  }
-  throw new Error("no free id");
+  return freeName(base, (id) =>
+    mkdir(videoDir(id)).then(
+      () => true,
+      (err: NodeJS.ErrnoException) => {
+        if (err.code === "EEXIST") return false;
+        throw err;
+      },
+    ),
+  );
 }
 
 /** Neither video nor audio in it: a 415. */

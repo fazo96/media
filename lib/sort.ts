@@ -11,6 +11,9 @@ export const SORTS: { key: Sort; label: string }[] = [
   { key: "title", label: "A–Z" },
 ];
 
+/** Names in the order a person reads them: "Part 2" before "Part 10", whatever the case. */
+export const byName = (a: string, b: string) => a.localeCompare(b, undefined, { sensitivity: "base", numeric: true });
+
 export const isSort = (s: string | null): s is Sort => SORTS.some((o) => o.key === s);
 
 const by: Record<Sort, (a: Video, b: Video) => number> = {
@@ -18,7 +21,7 @@ const by: Record<Sort, (a: Video, b: Video) => number> = {
   recent: (a, b) => (b.lastPlayedAt ?? b.addedAt) - (a.lastPlayedAt ?? a.addedAt),
   most: (a, b) => b.playCount - a.playCount || (b.lastPlayedAt ?? 0) - (a.lastPlayedAt ?? 0),
   added: (a, b) => b.addedAt - a.addedAt,
-  title: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: "base", numeric: true }),
+  title: (a, b) => byName(a.title, b.title),
 };
 
 /** A sorted copy. */

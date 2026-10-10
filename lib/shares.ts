@@ -1,8 +1,8 @@
 import "server-only";
 import { randomBytes } from "node:crypto";
-import { readdir, readFile, unlink } from "node:fs/promises";
+import { unlink } from "node:fs/promises";
 import path from "node:path";
-import { createExclusive } from "./files";
+import { createExclusive, listJson, readJson, unlessMissing } from "./files";
 import { isValidId, isValidShareToken } from "./ids";
 import { getVideo } from "./library";
 import { SHARES_DIR } from "./paths";
@@ -25,24 +25,11 @@ const CAST_MS = DAY_MS;
 const file = (token: string) => path.join(SHARES_DIR, `${token}.json`);
 const expired = (s: Share, now = Date.now()) => s.expiresAt !== null && s.expiresAt <= now;
 
-async function read(token: string): Promise<Share | null> {
-  try {
-    return JSON.parse(await readFile(file(token), "utf8")) as Share;
-  } catch {
-    return null;
-  }
-}
+const read = (token: string) => readJson<Share>(file(token));
 
 /** Every share link, expired or not, newest first. */
 async function readAll(): Promise<Share[]> {
-  let names: string[];
-  try {
-    names = await readdir(SHARES_DIR);
-  } catch {
-    return [];
-  }
-  const tokens = names.filter((n) => n.endsWith(".json")).map((n) => n.slice(0, -5)).filter(isValidShareToken);
-  const shares = (await Promise.all(tokens.map(read))).filter((s): s is Share => s !== null);
+  const shares = await listJson<Share>(SHARES_DIR, isValidShareToken);
   return shares.sort((a, b) => b.createdAt - a.createdAt);
 }
 
@@ -83,13 +70,7 @@ export async function castShare(videoId: string): Promise<Share> {
 /** End a link now. False when there was no such link. */
 export async function revokeShare(token: string): Promise<boolean> {
   if (!isValidShareToken(token)) return false;
-  try {
-    await unlink(file(token));
-    return true;
-  } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
-    throw err;
-  }
+  return unlessMissing(() => unlink(file(token)));
 }
 
 /**

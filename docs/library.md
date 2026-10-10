@@ -21,7 +21,7 @@ Browse/                 the library under its titles, as links into videos/ (see
 .media-auth.json        the lock's password hash (delete it to remove a forgotten password)
 ```
 
-There's no index: `listVideos()` reads every `meta.json`, `listPlaylists()` every playlist.
+There's no index: `listVideos()` reads every `meta.json`, `listPlaylists()` every playlist. `lib/files.ts` has what the three kinds of file share: `readJson`, `listJson` (a folder of `<key>.json`), `freeName` (`base`, then `base-2`, `base-3`…, claimed atomically), `unlessMissing` (a rename or unlink of something gone already), `serially` (one read-change-write at a time) and `writeAtomic` and `createExclusive` (whole files or none).
 
 ## Ids
 
@@ -58,7 +58,7 @@ Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api
 
 ## Playlists
 
-`lib/playlists.ts`. A playlist is a JSON file listing video ids in order; a video can be in any number of them. Its id is a slug of its title, claimed like a dropped file's (`createExclusive`, then `-2`, `-3`…); renaming keeps it. `updatePlaylist()` serializes changes to one file (`serially` in `lib/files.ts`, which `updateVideo()` uses too) and keeps one of each id.
+`lib/playlists.ts`. A playlist is a JSON file listing video ids in order; a video can be in any number of them. Its id is a slug of its title, claimed like a dropped file's (`freeName` and `createExclusive`: then `-2`, `-3`…); renaming keeps it. `updatePlaylist()` serializes changes to one file (`serially` in `lib/files.ts`, which `updateVideo()` uses too) and keeps one of each id.
 
 A torrent's Import all makes one too, marked with its `torrentHash` ([transmission](transmission.md#an-import)). Items aren't checked against the library: a whole YouTube playlist's ids are known before its videos download (see [downloads](downloads.md#playlists)), and deleting a video leaves its id behind. The pages show those as "not downloaded" (a YouTube one, with a retry) or "deleted", and skip them when playing. Deleting a playlist moves its file to the trash; its videos stay.
 

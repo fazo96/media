@@ -8,6 +8,7 @@ import { HttpError } from "./errors";
 import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, incomingDir, listVideos } from "./library";
 import { appendOrCreate, updatePlaylist } from "./playlists";
+import { byName } from "./sort";
 import { isActive, type Job, type Torrent, type TorrentFile, type TorrentJob, type Video } from "./types";
 
 // Importing from Transmission (docs/transmission.md): its RPC lists the
@@ -158,7 +159,7 @@ export function toTorrents(raw: RawTorrent[], videos: Video[]): Torrent[] {
     });
     if (files.length === 0) continue;
     // By name, numbers in order ("Part 2" before "Part 10"), whatever order the torrent has.
-    files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: "base" }));
+    files.sort((a, b) => byName(a.name, b.name));
     torrents.push({
       hash: t.hashString,
       name: t.name,
@@ -234,7 +235,7 @@ async function copy(from: string, to: string, signal: AbortSignal, onBytes: (n: 
 async function torrentPlaylist(job: TorrentJob, t: RawTorrent, videos: Video[]): Promise<(id: string) => Promise<void>> {
   const items = videos
     .filter((v) => v.torrentHash === t.hashString)
-    .sort((a, b) => (a.originalName ?? "").localeCompare(b.originalName ?? "", undefined, { numeric: true, sensitivity: "base" }))
+    .sort((a, b) => byName(a.originalName ?? "", b.originalName ?? ""))
     .map((v) => v.id);
   const playlist = await appendOrCreate((p) => p.torrentHash === t.hashString, { title: playlistTitleOf(t.name), torrentHash: t.hashString, items });
   job.playlistId = playlist.id;
