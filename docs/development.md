@@ -6,7 +6,18 @@
 
 ## The running server
 
-The user's media usually runs from this checkout as a production build on port 3300 (`npm start -- -p 3300`), public as media.trippy.pizza behind nginx (the vhost is in the dotfiles repo, `devices/ada.nix`: unbuffered and without a body size limit, so uploads stream through). Leave it running, and **don't run `next build` here**: it rewrites the `.next` that server is using. Build in a scratch worktree instead (`git worktree add <dir>`, copy the working-tree changes in, `cp -a --reflink=auto node_modules <dir>/`; Turbopack rejects a symlinked `node_modules`), and `git worktree remove` it afterwards.
+The user's media usually runs from this checkout as a production build on port 3300 (`nix develop --command npm start -- -H 0.0.0.0 -p 3300`), public as media.trippy.pizza behind nginx (the vhost is in the dotfiles repo, `devices/ada.nix`: unbuffered and without a body size limit, so uploads stream through). Leave it running, and **don't run `next build` here** while it does: it rewrites the `.next` that server is using. To try a build, build in a scratch worktree instead (`git worktree add <dir>`, copy the working-tree changes in, `cp -a --reflink=auto node_modules <dir>/`; Turbopack rejects a symlinked `node_modules`), and `git worktree remove` it afterwards.
+
+### Redeploying
+
+When the user asks to redeploy (downtime is fine for now):
+
+1. Check nothing is downloading (`curl -s localhost:3300/api/jobs` is `[]`): a restart drops the queue.
+2. Stop the server, found by port and working directory (see [stopping servers](#stopping-servers-you-started)); wait until `ss -ltn` no longer shows :3300.
+3. `nix develop --command npm run build` in this checkout.
+4. Start it again in the background with the command above, then check `curl localhost:3300/` and https://media.trippy.pizza/ answer 200.
+
+A `.next` built elsewhere (a worktree) can be copied in instead, to keep the downtime to seconds, but `.next/required-server-files.json` and `.js` hold the absolute path it was built in: replace it with this checkout's.
 
 ## The tools
 
