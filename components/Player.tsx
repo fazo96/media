@@ -253,7 +253,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
           <div className="watch-info">
             <h1 className="watch-title">{v.title}</h1>
             <p className="watch-meta">
-              {v.source === "youtube" ? (v.channel ?? "YouTube") : (v.originalName ?? "File")}
+              {v.source === "youtube" ? (v.channel ?? "YouTube") : (v.originalName?.split("/").pop() ?? "File")}
               {" · "}
               {v.playCount ? `watched ${v.playCount}×` : "not watched yet"}
               {v.lastPlayedAt ? ` · last ${formatAgo(v.lastPlayedAt)}` : ""}
@@ -309,7 +309,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                     </span>
                     <span className="other-text">
                       <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{o.id === v.id ? "Playing" : o.source === "youtube" ? (o.channel ?? "YouTube") : "File"}</span>
+                      <span className="other-meta">{o.id === v.id ? "Playing" : o.source === "youtube" ? (o.channel ?? "YouTube") : o.source === "torrent" ? "Torrent" : "File"}</span>
                     </span>
                   </Link>
                 </li>
@@ -331,7 +331,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                     </span>
                     <span className="other-text">
                       <span className="other-title">{o.title}</span>
-                      <span className="other-meta">{o.source === "youtube" ? (o.channel ?? "YouTube") : "File"}</span>
+                      <span className="other-meta">{o.source === "youtube" ? (o.channel ?? "YouTube") : o.source === "torrent" ? "Torrent" : "File"}</span>
                     </span>
                   </Link>
                 </li>

@@ -47,15 +47,34 @@ const state: State = (g.__mediaDownloads ??= { jobs: new Map(), aborts: new Map(
 export const listJobs = () => [...state.jobs.values()].sort((a, b) => a.createdAt - b.createdAt);
 export const getJob = (id: string) => state.jobs.get(id) ?? null;
 
+/** Queued or under way. */
+export const isActive = (j: Job) => j.state === "queued" || j.state === "downloading" || j.state === "processing";
+
+/**
+ * List a job that another queue runs (Transmission's imports, lib/transmission.ts):
+ * GET /api/jobs shows it and dismissing it fires `abort`.
+ */
+export function addJob(job: Job, abort: AbortController) {
+  state.jobs.set(job.id, job);
+  state.aborts.set(job.id, abort);
+}
+
+/** What cancels a job added with addJob, while it hasn't ended. */
+export const abortOf = (job: Job) => state.aborts.get(job.id);
+
+/** A job that ended: dismissing it just forgets it. */
+export const jobEnded = (job: Job) => state.aborts.delete(job.id);
+
 /**
  * Queue a download; an unfinished job for the same video is answered instead.
  * `playlistId` marks it as part of a whole playlist's (the page groups those).
  */
 export function enqueue(ytId: string, playlistId?: string): Job {
-  const active = listJobs().find((j) => j.youtubeId === ytId && (j.state === "queued" || j.state === "downloading" || j.state === "processing"));
+  const active = listJobs().find((j) => j.youtubeId === ytId && isActive(j));
   if (active) return active;
   const job: Job = {
     id: randomBytes(8).toString("hex"),
+    kind: "youtube",
     youtubeId: ytId,
     url: youtubeUrl(ytId),
     state: "queued",
@@ -83,7 +102,7 @@ async function pump() {
   state.running = true;
   try {
     let job: Job | undefined;
-    while ((job = listJobs().find((j) => j.state === "queued"))) await download(job);
+    while ((job = listJobs().find((j) => j.kind === "youtube" && j.state === "queued"))) await download(job);
   } finally {
     state.running = false;
   }
@@ -92,6 +111,7 @@ async function pump() {
 type Info = { title?: string; channel?: string; uploader?: string };
 
 async function download(job: Job) {
+  const ytId = job.youtubeId as string; // every job in this queue is a YouTube one
   const abort = new AbortController();
   state.aborts.set(job.id, abort);
   const dir = await incomingDir();
@@ -120,7 +140,7 @@ async function download(job: Job) {
         "-o",
         `infojson:${path.join(dir, "info")}`,
         "--",
-        job.youtubeId,
+        ytId,
       ],
       {
         signal: abort.signal,
@@ -148,14 +168,14 @@ async function download(job: Job) {
     const v = await addVideo(
       path.join(dir, video),
       {
-        title: info.title || job.youtubeId,
+        title: info.title || ytId,
         source: "youtube",
-        youtubeId: job.youtubeId,
+        youtubeId: ytId,
         url: job.url,
         channel: info.channel || info.uploader,
         originalName: video,
       },
-      { id: youtubeVideoId(job.youtubeId), thumb },
+      { id: youtubeVideoId(ytId), thumb },
     );
     job.state = "done";
     job.videoId = v.id;

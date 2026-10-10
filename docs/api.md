@@ -8,7 +8,8 @@
 | `GET/HEAD /api/videos/<id>/file` | The video, with `Range` support (206, 416; `lib/range.ts`) |
 | `GET /api/videos/<id>/thumb` | The still (the page adds `?v=<addedAt>` so a re-download's isn't hidden by the cache) |
 | `POST /api/videos/<id>/progress` | `{ position, started?, ended? }`: `started` counts a play, `ended` resets the position. Read as text, so `sendBeacon` works |
-| `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) |
+| `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) and imports from Transmission ([transmission](transmission.md)): listed, cancelled and dismissed alike |
+| `GET/POST /api/transmission` | Transmission ([transmission](transmission.md)): `{ torrents }` with a video in them; import `{ hash, files, remove? }` (`files`: indexes in the torrent; 202 `{ job }`; 400 for a file that isn't a finished video, 404 for a torrent that's gone, 409 while it's importing). 404 when `MEDIA_TRANSMISSION_URL` isn't set, 502 when Transmission can't be reached |
 | `GET /api/search?q=…` | Search YouTube ([downloads](downloads.md#searching)): `{ videos, playlists }`, up to 20 videos and 6 playlists; 400 for an empty or over-200-character query, 502 with yt-dlp's error, 504 after 60s |
 | `GET /api/youtube/playlist?list=…` | A YouTube playlist read whole ([downloads](downloads.md#playlists)), `YoutubePlaylist`, with `playlistId` when it was downloaded before; nothing is downloaded. 400 when `list` isn't a playlist link or id, 502, 504 |
 | `GET/POST /api/playlists` | Every playlist, newest first; make one: `{ title }` (201 `{ playlist }`), or `{ youtube: <link or id> }` to download a whole YouTube playlist (201 `{ playlist, jobs }`; 502, 504 as above) |

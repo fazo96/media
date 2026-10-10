@@ -3,17 +3,18 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, createPlaylist, downloadPlaylist, inspectPlaylist, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
+import { api, ApiError, createPlaylist, downloadPlaylist, importTorrent, inspectPlaylist, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
 import { local } from "@/lib/storage";
 import type { Job, Playlist, Video } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
 import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
-import { IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
+import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
 import Logo from "./Logo";
 import PlaylistCard from "./PlaylistCard";
 import PlaylistPreview, { type Preview } from "./PlaylistPreview";
 import SearchResults, { type Search } from "./SearchResults";
 import ThemeButton from "./ThemeButton";
+import TransmissionPanel from "./TransmissionPanel";
 import VideoCard from "./VideoCard";
 
 type Sort = "recent" | "most" | "added" | "title";
@@ -42,10 +43,11 @@ const ACTIVE = new Set(["queued", "downloading", "processing"]);
 
 type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
-type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[] };
+/** `transmission`: importing from Transmission is set up (MEDIA_TRANSMISSION_URL). */
+type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; transmission: boolean };
 
 /** The home page: every video and playlist, the downloads under way, and the ways in (drop, paste, pick). */
-export default function Library({ initialVideos, initialJobs, initialPlaylists }: Props) {
+export default function Library({ initialVideos, initialJobs, initialPlaylists, transmission }: Props) {
   const router = useRouter();
   const [videos, setVideos] = useState(initialVideos);
   const [jobs, setJobs] = useState(initialJobs);
@@ -56,6 +58,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists }
   const [link, setLink] = useState("");
   const [search, setSearch] = useState<Search | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
+  const [torrents, setTorrents] = useState(false);
   const [newList, setNewList] = useState<string | null>(null);
   const [notice, setNotice] = useState<Notice | null>(null);
   const [dragging, setDragging] = useState(false);
@@ -370,9 +373,19 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists }
     setJobs((prev) => prev.filter((j) => !ids.has(j.id)));
     await Promise.all(list.map((j) => api(`/api/jobs/${j.id}`, { method: "DELETE" }).catch(() => {})));
   };
+  const keepJob = (job: Job) => setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
   const retryJob = async (j: Job) => {
     await dismissJob(j.id);
-    await addLink(j.url, true);
+    if (!j.torrent) {
+      await addLink(j.url ?? "", true);
+      return;
+    }
+    // The files already in skip themselves.
+    try {
+      keepJob((await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove)).job);
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+    }
   };
 
   const pending = jobs.length + uploads.length;
@@ -423,6 +436,11 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists }
           <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
             <IconUpload /> Add files
           </button>
+          {transmission && (
+            <button type="button" className="btn" aria-pressed={torrents} onClick={() => setTorrents((on) => !on)}>
+              <IconDownload /> Transmission
+            </button>
+          )}
           <input
             ref={fileInput}
             type="file"
@@ -449,6 +467,8 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists }
             </button>
           </p>
         )}
+
+        {torrents && <TransmissionPanel jobs={jobs} onJob={keepJob} onClose={() => setTorrents(false)} />}
 
         {preview && (
           <PlaylistPreview

@@ -5,7 +5,8 @@ Everything lives under `MEDIA_DIR` (default `./data`, `lib/paths.ts`):
 ```
 videos/<id>/video.mp4   the video (or .webm, or the original extension when it can't play)
             meta.json   the Video (lib/types.ts): title, source, codecs, duration, size,
-                        addedAt, lastPlayedAt, playCount, position (seconds, 0 when finished)
+                        addedAt, lastPlayedAt, playCount, position (seconds, 0 when finished);
+                        from a torrent, its hash, name and path in it (docs/transmission.md)
             thumb.jpg   640px still (from yt-dlp for YouTube, else ffmpeg at 10% in, max 10s)
 playlists/<id>.json     a Playlist (lib/types.ts): title, items (video ids, in order), and
                         for one downloaded from YouTube its list id, link and channel

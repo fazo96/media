@@ -3,7 +3,7 @@
 // throws an ApiError carrying the server's own message ({ error } in the body).
 // Uploads (with progress) and beacons use XHR and sendBeacon directly.
 
-import type { Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, ShareTarget, Video, YoutubePlaylist } from "./types";
+import type { Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, ShareTarget, Torrent, Video, YoutubePlaylist } from "./types";
 import { playlistUrl } from "./youtube";
 
 export class ApiError extends Error {
@@ -110,3 +110,10 @@ export const revokeShare = (token: string) => apiDelete(`/api/shares/${token}`);
 
 /** A share link's page, as an absolute URL to send someone. */
 export const shareUrl = (s: Share) => `${location.origin}/s/${s.token}`;
+
+/** Transmission's torrents with a video in them (404 when it isn't set up, 502 when it can't be reached). */
+export const listTorrents = () => api<{ torrents: Torrent[] }>("/api/transmission");
+
+/** Import a torrent's finished videos (`files`: indexes), then maybe remove it from Transmission. */
+export const importTorrent = (hash: string, files: number[], remove: boolean) =>
+  api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove } });

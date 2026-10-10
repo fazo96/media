@@ -95,7 +95,7 @@ async function claim(base: string): Promise<string> {
 
 export class NotAVideo extends Error {}
 
-type Details = Pick<Video, "title" | "source" | "originalName" | "youtubeId" | "url" | "channel">;
+type Details = Pick<Video, "title" | "source" | "originalName" | "youtubeId" | "url" | "channel" | "torrentHash" | "torrentName">;
 
 /**
  * Bring a file from INCOMING_DIR into the library: probe it, remux it if only

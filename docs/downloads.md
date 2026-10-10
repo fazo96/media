@@ -1,6 +1,6 @@
 # YouTube downloads
 
-`lib/downloads.ts` keeps a queue in memory (on `globalThis`, so `next dev`'s reloads share it) and runs one yt-dlp at a time. Jobs (`Job` in `lib/types.ts`) go queued → downloading → processing → done or failed, and stay listed until dismissed (`DELETE /api/jobs/<jid>`, which also cancels a running one) or the server restarts. A restart loses the queue; `.incoming/` is emptied at startup.
+`lib/downloads.ts` keeps a queue in memory (on `globalThis`, so `next dev`'s reloads share it) and runs one yt-dlp at a time. Jobs (`Job` in `lib/types.ts`) go queued → downloading → processing → done or failed, and stay listed until dismissed (`DELETE /api/jobs/<jid>`, which also cancels a running one) or the server restarts. A restart loses the queue; `.incoming/` is emptied at startup. Imports from Transmission are jobs in the same list (`kind: "torrent"`), run by a queue of their own ([transmission](transmission.md#an-import)).
 
 `POST /api/jobs { url }` accepts any link `parseYoutube()` (`lib/youtube.ts`) understands (watch, youtu.be, shorts, embed, live, music, a bare 11-character id). If the video is in the library already it answers `{ video }` and downloads nothing, unless `replace: true` ("Download again"). Asking for a video that's already queued answers its job. A watch link inside a playlist (`&list=`) downloads just the video; the page offers the playlist beside it.
 

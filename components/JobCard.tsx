@@ -2,7 +2,7 @@
 
 import { formatSize } from "@/lib/format";
 import type { Job } from "@/lib/types";
-import { IconClose, IconRefresh, IconUpload, IconWarn } from "./icons";
+import { IconClose, IconDownload, IconRefresh, IconUpload, IconWarn } from "./icons";
 
 export type Upload = { key: string; name: string; sent: number; state: "waiting" | "sending" | "processing" | "failed"; error?: string };
 
@@ -17,15 +17,20 @@ function Progress({ value }: { value: number | null }) {
 
 const eta = (s?: number) => (s === undefined || !Number.isFinite(s) ? "" : s < 60 ? `${Math.round(s)}s left` : `${Math.round(s / 60)} min left`);
 
-/** A YouTube download in the grid, until its video takes its place. */
+/** A YouTube download, or an import from Transmission, in the grid until its video takes its place. */
 export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismiss: () => void; onRetry: () => void }) {
   const failed = job.state === "failed";
+  const t = job.torrent;
+  // Which of a torrent's files, when it's more than one.
+  const of = t && t.files.length > 1 ? `${t.current + 1} of ${t.files.length}` : "";
   const status =
     job.state === "queued"
       ? "Waiting its turn"
       : job.state === "downloading"
         ? [
-            job.progress === null ? "Starting" : `${Math.round(job.progress * 100)}%`,
+            t ? "Copying" : "",
+            of,
+            job.progress === null ? (t ? "" : "Starting") : `${Math.round(job.progress * 100)}%`,
             job.stream > 0 ? "audio" : "",
             job.speed ? `${formatSize(job.speed)}/s` : "",
             eta(job.eta),
@@ -33,19 +38,25 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
             .filter(Boolean)
             .join(" · ")
         : job.state === "processing"
-          ? "Finishing"
+          ? t
+            ? ["Reading the video", of].filter(Boolean).join(" · ")
+            : "Finishing"
           : job.state === "done"
             ? "Added"
             : (job.error ?? "Failed");
 
   return (
     <article className={`card card-pending ${failed ? "is-failed" : ""}`}>
-      <div className="thumb">
-        <img src={`https://i.ytimg.com/vi/${job.youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+      <div className={`thumb ${t ? "thumb-blank" : ""}`}>
+        {t ? (
+          <IconDownload />
+        ) : (
+          <img src={`https://i.ytimg.com/vi/${job.youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+        )}
         {!failed && job.state !== "done" && <Progress value={job.state === "downloading" ? job.progress : null} />}
       </div>
       <div className="card-body">
-        <h2 className="card-title">{job.title ?? `YouTube · ${job.youtubeId}`}</h2>
+        <h2 className="card-title">{job.title ?? (t ? "Torrent" : `YouTube · ${job.youtubeId}`)}</h2>
         <p className={`card-meta ${failed ? "is-error" : ""}`} title={failed ? status : undefined}>
           {failed && <IconWarn />} {status}
         </p>
@@ -56,7 +67,7 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
             <IconRefresh />
           </button>
         )}
-        <button type="button" className="icon-btn" onClick={onDismiss} aria-label={failed ? "Dismiss" : "Cancel download"} title={failed ? "Dismiss" : "Cancel"}>
+        <button type="button" className="icon-btn" onClick={onDismiss} aria-label={failed ? "Dismiss" : t ? "Cancel import" : "Cancel download"} title={failed ? "Dismiss" : "Cancel"}>
           <IconClose />
         </button>
       </div>

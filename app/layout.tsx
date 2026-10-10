@@ -10,6 +10,7 @@ import "./styles/base.css";
 import "./styles/controls.css";
 import "./styles/library.css";
 import "./styles/playlists.css";
+import "./styles/transmission.css";
 import "./styles/player.css";
 import "./styles/settings.css";
 

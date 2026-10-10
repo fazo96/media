@@ -1,0 +1,128 @@
+/* ─── Transmission: torrents to import, above the library ── */
+.shelf-actions {
+  display: flex;
+  flex-shrink: 0;
+}
+
+.btn[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.torrent-filter {
+  margin: 0;
+  max-width: 320px;
+}
+
+.check {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink-soft);
+  cursor: pointer;
+}
+
+.check input {
+  accent-color: var(--accent);
+  width: 16px;
+  height: 16px;
+  margin: 0;
+}
+
+.torrents,
+.torrent-files {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.torrents {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
+  /* Hundreds of files: the panel scrolls, the library stays in reach. */
+  max-height: min(70vh, 720px);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.torrent {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.torrent-head {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.torrent-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.torrent-name {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.torrent-files {
+  margin-top: 8px;
+  border-top: 1px solid var(--rule);
+}
+
+.torrent-file {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 4px 0;
+  border-bottom: 1px solid var(--rule);
+  font-size: 14px;
+}
+
+.torrent-file:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+.torrent-file-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.torrent-file-size,
+.torrent-file-state {
+  flex-shrink: 0;
+  font: 500 12px var(--font-mono);
+  color: var(--ink-faint);
+}
+
+a.torrent-file-state {
+  color: var(--ok);
+  text-decoration: none;
+}
+
+a.torrent-file-state:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 560px) {
+  .torrent-filter {
+    max-width: none;
+    flex-basis: 100%;
+  }
+
+  .torrent-file-size {
+    display: none;
+  }
+}

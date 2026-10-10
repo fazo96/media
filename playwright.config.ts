@@ -12,6 +12,7 @@ import { defineConfig, devices } from "@playwright/test";
 // one too, since the tests add and delete videos.
 
 const PORT = 3101;
+const STUB_TRANSMISSION_PORT = 3102;
 const external = process.env.MEDIA_E2E_URL;
 
 // The config is loaded again by each worker, which inherits this: one library a run.
@@ -41,15 +42,25 @@ export default defineConfig({
   ],
   webServer: external
     ? undefined
-    : {
-        command: `next dev -p ${PORT}`,
-        url: `http://localhost:${PORT}/api/videos`,
-        reuseExistingServer: false,
-        timeout: 120_000,
-        env: {
-          MEDIA_DIR: path.join(library, "data"),
-          // Downloads go to a stub that "downloads" the fixture clip (e2e/stub-yt-dlp.mjs).
-          MEDIA_YTDLP: `node ${path.resolve("e2e/stub-yt-dlp.mjs")}`,
+    : [
+        {
+          // Transmission's RPC, with torrents of the fixture clip (e2e/stub-transmission.mjs).
+          command: `node e2e/stub-transmission.mjs ${STUB_TRANSMISSION_PORT} ${path.join(library, "downloads")}`,
+          port: STUB_TRANSMISSION_PORT,
+          reuseExistingServer: false,
         },
-      },
+        {
+          command: `next dev -p ${PORT}`,
+          url: `http://localhost:${PORT}/api/videos`,
+          reuseExistingServer: false,
+          timeout: 120_000,
+          env: {
+            MEDIA_DIR: path.join(library, "data"),
+            // Downloads go to a stub that "downloads" the fixture clip (e2e/stub-yt-dlp.mjs).
+            MEDIA_YTDLP: `node ${path.resolve("e2e/stub-yt-dlp.mjs")}`,
+            MEDIA_TRANSMISSION_URL: `http://127.0.0.1:${STUB_TRANSMISSION_PORT}/transmission/rpc`,
+            MEDIA_TRANSMISSION_PATHS: `/downloads=${path.join(library, "downloads")}`,
+          },
+        },
+      ],
 });

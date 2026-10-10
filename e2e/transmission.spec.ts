@@ -1,0 +1,61 @@
+import { expect, test } from "@playwright/test";
+
+// Against e2e/stub-transmission.mjs, which playwright.config.ts starts on :3102.
+const STUB = "http://127.0.0.1:3102/transmission/rpc";
+const MOVIE = "a".repeat(40);
+const SERIES = "b".repeat(40);
+
+async function stub(method: string) {
+  const res = await fetch(STUB, { method: "POST", headers: { "X-Transmission-Session-Id": "stub-session-id" }, body: JSON.stringify({ method }) });
+  return ((await res.json()) as { arguments: Record<string, unknown> }).arguments;
+}
+
+test.skip(!!process.env.MEDIA_E2E_URL, "needs the stub Transmission");
+test.beforeEach(() => stub("stub-reset"));
+
+test("the API lists torrents' videos and refuses what it can't import", async ({ request }) => {
+  const { torrents } = (await (await request.get("/api/transmission")).json()) as { torrents: { hash: string; files: { name: string; done: number }[] }[] };
+  const series = torrents.find((t) => t.hash === SERIES);
+  expect(series?.files.map((f) => f.name)).toEqual(["Stub Series/Episode 1.mp4", "Stub Series/Episode 2.mp4", "Stub Series/Episode 3.mp4"]);
+  expect(torrents.some((t) => t.hash === "c".repeat(40))).toBe(false); // a pdf
+
+  expect((await request.post("/api/transmission", { data: { hash: "nope", files: [0] } })).status()).toBe(400);
+  expect((await request.post("/api/transmission", { data: { hash: SERIES, files: [] } })).status()).toBe(400);
+  const unfinished = await request.post("/api/transmission", { data: { hash: SERIES, files: [2] } });
+  expect(unfinished.status()).toBe(400);
+  expect((await unfinished.json()).error).toContain("hasn’t finished");
+});
+
+test("import a torrent's video, and the torrent goes from Transmission", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Transmission", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Transmission" });
+  const movie = panel.locator(`[data-torrent="${MOVIE}"]`);
+  await expect(movie).toContainText("Stub.Movie.2020.1080p.mp4");
+  // The unfinished episode says how far along it is, with no button.
+  await expect(panel.locator(".torrent-file", { hasText: "Episode 3.mp4" })).toContainText(/\d+%$/);
+  await expect(panel.locator(".torrent-file", { hasText: "Episode 3.mp4" }).getByRole("button")).toHaveCount(0);
+
+  await expect(panel.getByLabel(/Then delete the torrent/)).toBeChecked();
+  await movie.getByRole("button", { name: "Import" }).click();
+  await expect(page.locator(".card", { hasText: "Stub Movie 2020 1080p" }).locator("a.thumb")).toBeVisible({ timeout: 30_000 });
+  await expect(movie).toHaveCount(0);
+  expect((await stub("stub-removed")).removed).toEqual([{ hash: MOVIE, deleteLocalData: true }]);
+});
+
+test("deleting a torrent with other videos asks first; without deleting, it stays", async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Transmission", exact: true }).click();
+  const panel = page.getByRole("region", { name: "Transmission" });
+  const series = panel.locator(`[data-torrent="${SERIES}"]`);
+  await series.locator(".torrent-file", { hasText: "Episode 1.mp4" }).getByRole("button", { name: "Import" }).click();
+  await expect(series.getByRole("alert")).toContainText("also deletes 2 other videos");
+  await series.getByRole("button", { name: "Cancel" }).click();
+  await expect(series.getByRole("alert")).toHaveCount(0);
+
+  await panel.getByLabel(/Then delete the torrent/).uncheck();
+  await series.getByRole("button", { name: "Import all (2)" }).click();
+  await expect(series.getByRole("link", { name: "In the library" })).toHaveCount(2, { timeout: 30_000 });
+  await expect(page.locator(".card", { hasText: "Episode 2" }).locator("a.thumb")).toBeVisible();
+  expect((await stub("stub-removed")).removed).toEqual([]);
+});

@@ -1,18 +1,21 @@
 // Shapes shared by the server and the browser.
 
-export type VideoSource = "file" | "youtube";
+export type VideoSource = "file" | "youtube" | "torrent";
 
 /** A video's meta.json (and what the API answers with). */
 export type Video = {
   id: string;
   title: string;
   source: VideoSource;
-  /** The file name it was dropped as (source "file"). */
+  /** The file name it was dropped as (source "file"), or its path in the torrent (source "torrent"). */
   originalName?: string;
   /** source "youtube": the 11-character id, the link and the channel. */
   youtubeId?: string;
   url?: string;
   channel?: string;
+  /** source "torrent": the torrent's info hash and its name in Transmission. */
+  torrentHash?: string;
+  torrentName?: string;
   /** The video file in the folder, e.g. "video.mp4". */
   file: string;
   mime: string;
@@ -35,22 +38,26 @@ export type Video = {
 
 export type JobState = "queued" | "downloading" | "processing" | "done" | "failed";
 
-/** A YouTube download, as GET /api/jobs lists it. */
+/** A YouTube download or an import from Transmission, as GET /api/jobs lists it. */
 export type Job = {
   id: string;
-  youtubeId: string;
-  url: string;
-  /** Known once yt-dlp has read the video's details. */
+  kind: "youtube" | "torrent";
+  /** kind "youtube": the video's id and link. */
+  youtubeId?: string;
+  url?: string;
+  /** kind "torrent": what's being imported. */
+  torrent?: TorrentImport;
+  /** Known once yt-dlp has read the video's details; a torrent's name. */
   title?: string;
   state: JobState;
-  /** 0–1 for the stream being downloaded; null when unknown. */
+  /** 0–1 for the stream being downloaded, or of the bytes to copy; null when unknown. */
   progress: number | null;
   /** Which stream: video and audio come down one after the other. */
   stream: number;
   speed?: number;
   eta?: number;
   error?: string;
-  /** The video, once done. */
+  /** The video, once done (a torrent's first). */
   videoId?: string;
   /** The playlist it was queued for, when a whole one was. */
   playlistId?: string;
@@ -132,3 +139,41 @@ export type SharedLink = Share & { title?: string };
 
 /** What a share link is for: one video, or a playlist. */
 export type ShareTarget = { videoId: string } | { playlistId: string };
+
+/** A torrent's video file, as GET /api/transmission lists it. */
+export type TorrentFile = {
+  /** Its index in the torrent (what an import names). */
+  index: number;
+  /** Its path in the torrent, starting with the torrent's folder when it has one. */
+  name: string;
+  size: number;
+  /** 0–1; only a finished file (1) can be imported. */
+  done: number;
+  /** The video imported from it, while that's in the library. */
+  videoId?: string;
+};
+
+/** A torrent in Transmission with at least one video file. */
+export type Torrent = {
+  hash: string;
+  name: string;
+  size: number;
+  /** 0–1, of the files it's downloading. */
+  progress: number;
+  /** Milliseconds since 1970. */
+  addedAt: number;
+  /** Its video files, by name. */
+  files: TorrentFile[];
+  /** How many of its files aren't videos (subtitles, covers, .nfo…): removing the torrent deletes those too. */
+  otherFiles: number;
+};
+
+/** What a torrent job imports, and whether it then removes the torrent and its data from Transmission. */
+export type TorrentImport = {
+  hash: string;
+  /** File indexes, in the order they're imported. */
+  files: number[];
+  remove: boolean;
+  /** Which of `files` is being worked on (an index into it). */
+  current: number;
+};

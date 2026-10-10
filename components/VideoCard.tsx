@@ -44,7 +44,7 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
 
   const watched = v.duration > 0 && v.position > 0 ? Math.min(1, v.position / v.duration) : 0;
   const meta = [
-    v.source === "youtube" ? (v.channel ?? "YouTube") : "File",
+    v.source === "youtube" ? (v.channel ?? "YouTube") : v.source === "torrent" ? "Torrent" : "File",
     v.playCount ? `watched ${v.playCount}×` : "not watched yet",
     v.lastPlayedAt ? formatAgo(v.lastPlayedAt) : null,
   ]
