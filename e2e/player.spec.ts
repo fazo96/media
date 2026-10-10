@@ -97,7 +97,8 @@ test("listen mode hands over to the layer from the same place, and back, and is 
   await controls.getByRole("button", { name: "Play" }).click();
   await expect(controls.getByRole("button", { name: "Pause" })).toBeVisible();
   await expect.poll(() => timeOf(layer)).toBeGreaterThan(7.5);
-  await expect(controls).toContainText("0:07 / 0:30");
+  // The controls show the layer's time (a second or so on by now).
+  await expect(controls).toContainText(/0:(0[7-9]|1\d) \/ 0:30/);
   // One play, counted by the layer (the video never played).
   await expect.poll(async () => (await videoOf(request, v.id)).playCount).toBe(1);
   await controls.getByRole("button", { name: "Pause" }).click();
