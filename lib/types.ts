@@ -61,15 +61,17 @@ export type JobState ="queued" | "downloading" | "processing" | "done" | "failed
 /** Queued or under way. */
 export const isActive = (j: Pick<Job, "state">) => j.state === "queued" || j.state === "downloading" || j.state === "processing";
 
-/** A YouTube download or an import from Transmission, as GET /api/jobs lists it. */
-export type Job = {
+/** A YouTube download or an import from Transmission, as GET /api/jobs lists it (lib/jobs.ts). */
+export type Job = YoutubeJob | TorrentJob;
+
+/** A YouTube download: the video's id and link. */
+export type YoutubeJob = JobBase & { kind: "youtube"; youtubeId: string; url: string; torrent?: never };
+
+/** An import from Transmission: what's being imported. */
+export type TorrentJob = JobBase & { kind: "torrent"; torrent: TorrentImport; youtubeId?: never; url?: never };
+
+type JobBase = {
   id: string;
-  kind: "youtube" | "torrent";
-  /** kind "youtube": the video's id and link. */
-  youtubeId?: string;
-  url?: string;
-  /** kind "torrent": what's being imported. */
-  torrent?: TorrentImport;
   /** Known once yt-dlp has read the video's details; a torrent's name. */
   title?: string;
   state: JobState;
@@ -80,7 +82,7 @@ export type Job = {
   speed?: number;
   eta?: number;
   error?: string;
-  /** state "processing": its audio is being converted to AAC (a torrent's). */
+  /** state "processing": its audio is being converted to AAC. */
   converting?: boolean;
   /** The video, once done (a torrent's first). */
   videoId?: string;

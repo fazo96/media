@@ -20,7 +20,7 @@ Transmission's classic JSON protocol (`{ method, arguments }`, `result: "success
 
 ## An import
 
-`POST /api/transmission { hash, files, remove, playlist }` (`importTorrent()`) checks with Transmission that each file is one of the torrent's videos and finished (else 400; 404 when the torrent is gone; 409 while the same torrent is importing already) and queues a job. Jobs are the same `Job` as YouTube's (`kind: "torrent"`, in `lib/downloads.ts`'s list, so `GET /api/jobs` and the page's cards show them and `DELETE /api/jobs/<jid>` cancels them), but run in a queue of their own, one at a time, so a big copy doesn't hold up downloads.
+`POST /api/transmission { hash, files, remove, playlist }` (`importTorrent()`) checks with Transmission that each file is one of the torrent's videos and finished (else 400; 404 when the torrent is gone; 409 while the same torrent is importing already) and queues a job. Jobs are the same `Job` as YouTube's (`kind: "torrent"`, `TorrentJob`, in `lib/jobs.ts`'s list, so `GET /api/jobs` and the page's cards show them and `DELETE /api/jobs/<jid>` cancels them), but run in a queue of their own, one at a time, so a big copy doesn't hold up downloads.
 
 With `playlist` (Import all), before the first file it finds the [playlist](library.md#playlists) made from this torrent before (by `torrentHash`) or makes one, titled with the torrent's name spaced out like a file's (`Show.S01.1080p` → `Show S01 1080p`, nothing taken off), and puts in it the torrent's videos already in the library, by name with numbers in order. The job's `playlistId` is that playlist.
 

@@ -1,4 +1,5 @@
-import { enqueue, existing, listJobs } from "@/lib/downloads";
+import { enqueue, existing } from "@/lib/downloads";
+import { listJobs } from "@/lib/jobs";
 import { badRequest, noStore, readJson, route } from "@/lib/route";
 import { parseYoutube } from "@/lib/youtube";
 

@@ -1,17 +1,16 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { youtubeVideoId } from "./ids";
+import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, getVideo, incomingDir } from "./library";
 import { createPlaylist, findYoutubePlaylist, updatePlaylist } from "./playlists";
 import { run } from "./tools";
-import { isActive, type Job, type Playlist, type PlaylistResult, type SearchResult, type SearchResults, type YoutubePlaylist } from "./types";
+import { isActive, type Job, type Playlist, type PlaylistResult, type SearchResult, type SearchResults, type YoutubeJob, type YoutubePlaylist } from "./types";
 import { parsePlaylist, parseYoutube, playlistUrl, youtubeUrl } from "./youtube";
 
-// YouTube downloads (docs/downloads.md): a queue in memory, one yt-dlp at a
-// time. Jobs that end stay listed (done or failed) until dismissed or the
-// server restarts; a restart drops the queue and what was half-downloaded.
+// YouTube downloads (docs/downloads.md): jobs (lib/jobs.ts) run one yt-dlp at
+// a time. A restart drops the queue and what was half-downloaded.
 
 /** Tallest video to ask for; MEDIA_MAX_HEIGHT overrides it. */
 const MAX_HEIGHT = Number(process.env.MEDIA_MAX_HEIGHT) || 1080;
@@ -38,29 +37,7 @@ export function parseProgress(line: string): { done: number; total: number | nul
   return { done, total: total && total > 0 ? total : null, speed: num(m[4]), eta: num(m[5]) };
 }
 
-type State = { jobs: Map<string, Job>; aborts: Map<string, AbortController>; running: boolean };
-
-// On globalThis so next dev's module reloads share one queue.
-const g = globalThis as { __mediaDownloads?: State };
-const state: State = (g.__mediaDownloads ??= { jobs: new Map(), aborts: new Map(), running: false });
-
-export const listJobs = () => [...state.jobs.values()].sort((a, b) => a.createdAt - b.createdAt);
-export const getJob = (id: string) => state.jobs.get(id) ?? null;
-
-/**
- * List a job that another queue runs (Transmission's imports, lib/transmission.ts):
- * GET /api/jobs shows it and dismissing it fires `abort`.
- */
-export function addJob(job: Job, abort: AbortController) {
-  state.jobs.set(job.id, job);
-  state.aborts.set(job.id, abort);
-}
-
-/** What cancels a job added with addJob, while it hasn't ended. */
-export const abortOf = (job: Job) => state.aborts.get(job.id);
-
-/** A job that ended: dismissing it just forgets it. */
-export const jobEnded = (job: Job) => state.aborts.delete(job.id);
+const add = queue("youtube", download);
 
 /**
  * Queue a download; an unfinished job for the same video is answered instead.
@@ -69,8 +46,8 @@ export const jobEnded = (job: Job) => state.aborts.delete(job.id);
 export function enqueue(ytId: string, playlistId?: string): Job {
   const active = listJobs().find((j) => j.youtubeId === ytId && isActive(j));
   if (active) return active;
-  const job: Job = {
-    id: randomBytes(8).toString("hex"),
+  return add({
+    id: newJobId(),
     kind: "youtube",
     youtubeId: ytId,
     url: youtubeUrl(ytId),
@@ -79,38 +56,13 @@ export function enqueue(ytId: string, playlistId?: string): Job {
     stream: 0,
     playlistId,
     createdAt: Date.now(),
-  };
-  state.jobs.set(job.id, job);
-  void pump();
-  return job;
-}
-
-/** Cancel a job that's still going, or forget one that ended. */
-export function dismiss(id: string): boolean {
-  const job = state.jobs.get(id);
-  if (!job) return false;
-  state.aborts.get(id)?.abort();
-  state.jobs.delete(id);
-  return true;
-}
-
-async function pump() {
-  if (state.running) return;
-  state.running = true;
-  try {
-    let job: Job | undefined;
-    while ((job = listJobs().find((j) => j.kind === "youtube" && j.state === "queued"))) await download(job);
-  } finally {
-    state.running = false;
-  }
+  });
 }
 
 type Info = { title?: string; channel?: string; uploader?: string };
 
-async function download(job: Job) {
-  const ytId = job.youtubeId as string; // every job in this queue is a YouTube one
-  const abort = new AbortController();
-  state.aborts.set(job.id, abort);
+async function download(job: YoutubeJob, signal: AbortSignal) {
+  const ytId = job.youtubeId;
   const dir = await incomingDir();
   job.state = "downloading";
   try {
@@ -140,7 +92,7 @@ async function download(job: Job) {
         ytId,
       ],
       {
-        signal: abort.signal,
+        signal,
         onLine: (line) => {
           const p = parseProgress(line);
           if (!p) return;
@@ -175,21 +127,16 @@ async function download(job: Job) {
       {
         id: youtubeVideoId(ytId),
         thumb,
-        signal: abort.signal,
+        signal,
         onConvert: () => {
           job.converting = true;
         },
       },
     );
-    job.converting = false;
-    job.state = "done";
     job.videoId = v.id;
   } catch (err) {
-    job.state = "failed";
-    job.error = abort.signal.aborted ? "Cancelled." : (err as Error).message;
     await rm(dir, { recursive: true, force: true });
-  } finally {
-    state.aborts.delete(job.id);
+    throw err;
   }
 }
 

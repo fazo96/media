@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import PlaylistView from "@/components/PlaylistView";
-import { listJobs } from "@/lib/downloads";
+import { listJobs } from "@/lib/jobs";
 import { isValidId } from "@/lib/ids";
 import { listVideos } from "@/lib/library";
 import { getPlaylist } from "@/lib/playlists";

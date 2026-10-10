@@ -1,14 +1,13 @@
 import "server-only";
-import { randomBytes } from "node:crypto";
 import { createReadStream, createWriteStream } from "node:fs";
 import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
-import { abortOf, addJob, jobEnded, listJobs } from "./downloads";
+import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, incomingDir, listVideos } from "./library";
 import { createPlaylist, findTorrentPlaylist, updatePlaylist } from "./playlists";
-import { isActive, type Job, type Torrent, type TorrentFile, type TorrentImport, type Video } from "./types";
+import { isActive, type Job, type Torrent, type TorrentFile, type TorrentJob, type Video } from "./types";
 
 // Importing from Transmission (docs/transmission.md): its RPC lists the
 // torrents' video files; an import copies the chosen ones into the library
@@ -74,11 +73,11 @@ export const titleOf = (name: string) => spaced(path.posix.basename(name, path.p
 /** A playlist's title from a torrent's name: spaced out, but nothing taken off (`Show.S01.1080p` has no extension). */
 export const playlistTitleOf = (name: string) => spaced(name);
 
-type State = { sessionId: string; running: boolean };
+type State = { sessionId: string };
 
-// On globalThis so next dev's module reloads share them.
+// On globalThis so next dev's module reloads share it.
 const g = globalThis as { __mediaTransmission?: State };
-const state: State = (g.__mediaTransmission ??= { sessionId: "", running: false });
+const state: State = (g.__mediaTransmission ??= { sessionId: "" });
 
 /** One RPC call; its `arguments`. Throws TransmissionError when Transmission can't be reached or says no. */
 async function rpc<T>(method: string, args: Record<string, unknown>, signal?: AbortSignal): Promise<T> {
@@ -187,6 +186,8 @@ async function getTorrent(hash: string, signal?: AbortSignal): Promise<RawTorren
 
 const finished = (f: RawTorrent["files"][number]) => f.bytesCompleted >= f.length;
 
+const add = queue("torrent", runImport);
+
 /**
  * Queue an import of a torrent's finished video files (by index). `remove`:
  * then remove the torrent and its data from Transmission, once all of them are
@@ -203,8 +204,8 @@ export async function importTorrent(hash: string, indexes: number[], remove: boo
     if (!f || !isVideoFile(f.name)) throw new ImportError(400, "That isn’t one of the torrent’s videos.");
     if (!finished(f)) throw new ImportError(400, `“${path.posix.basename(f.name)}” hasn’t finished downloading.`);
   }
-  const job: Job = {
-    id: randomBytes(8).toString("hex"),
+  return add({
+    id: newJobId(),
     kind: "torrent",
     torrent: { hash, files, remove, playlist, current: 0 },
     title: t.name,
@@ -212,21 +213,7 @@ export async function importTorrent(hash: string, indexes: number[], remove: boo
     progress: null,
     stream: 0,
     createdAt: Date.now(),
-  };
-  addJob(job, new AbortController());
-  void pump();
-  return job;
-}
-
-async function pump() {
-  if (state.running) return;
-  state.running = true;
-  try {
-    let job: Job | undefined;
-    while ((job = listJobs().find((j) => j.kind === "torrent" && j.state === "queued"))) await run(job);
-  } finally {
-    state.running = false;
-  }
+  });
 }
 
 /** Copy `from` to `to`, telling `onBytes` each chunk's size. */
@@ -245,7 +232,7 @@ async function copy(from: string, to: string, signal: AbortSignal, onBytes: (n: 
  * named after the torrent, with the torrent's videos already in the library (by
  * name, numbers in order). Sets the job's `playlistId`; answers how to add one more.
  */
-async function torrentPlaylist(job: Job, t: RawTorrent, videos: Video[]): Promise<(id: string) => Promise<void>> {
+async function torrentPlaylist(job: TorrentJob, t: RawTorrent, videos: Video[]): Promise<(id: string) => Promise<void>> {
   const items = videos
     .filter((v) => v.torrentHash === t.hashString)
     .sort((a, b) => (a.originalName ?? "").localeCompare(b.originalName ?? "", undefined, { numeric: true, sensitivity: "base" }))
@@ -260,88 +247,79 @@ async function torrentPlaylist(job: Job, t: RawTorrent, videos: Video[]): Promis
   };
 }
 
-async function run(job: Job) {
-  const imp = job.torrent as TorrentImport;
-  const signal = (abortOf(job) ?? new AbortController()).signal;
+async function runImport(job: TorrentJob, signal: AbortSignal) {
+  const imp = job.torrent;
   job.state = "downloading";
-  try {
-    const t = await getTorrent(imp.hash, signal);
-    if (!t) throw new Error("The torrent isn’t in Transmission any more.");
-    const map = parsePathMap(process.env.MEDIA_TRANSMISSION_PATHS);
-    const videos = await listVideos();
-    // A file imported before (by a try that failed on a later one) counts as in.
-    const inLibrary = (name: string) => videos.find((v) => v.torrentHash === imp.hash && v.originalName === name);
-    // Import all's playlist: made (or found) first, so a failure halfway leaves what got in.
-    const addToPlaylist = imp.playlist ? await torrentPlaylist(job, t, videos) : async () => {};
-    const total = imp.files.reduce((sum, i) => sum + (t.files[i] && !inLibrary(t.files[i].name) ? t.files[i].length : 0), 0);
-    let copied = 0;
-    const started = Date.now();
+  const t = await getTorrent(imp.hash, signal);
+  if (!t) throw new Error("The torrent isn’t in Transmission any more.");
+  const map = parsePathMap(process.env.MEDIA_TRANSMISSION_PATHS);
+  const videos = await listVideos();
+  // A file imported before (by a try that failed on a later one) counts as in.
+  const inLibrary = (name: string) => videos.find((v) => v.torrentHash === imp.hash && v.originalName === name);
+  // Import all's playlist: made (or found) first, so a failure halfway leaves what got in.
+  const addToPlaylist = imp.playlist ? await torrentPlaylist(job, t, videos) : async () => {};
+  const total = imp.files.reduce((sum, i) => sum + (t.files[i] && !inLibrary(t.files[i].name) ? t.files[i].length : 0), 0);
+  let copied = 0;
+  const started = Date.now();
 
-    for (const [n, i] of imp.files.entries()) {
-      signal.throwIfAborted();
-      imp.current = n;
-      const f = t.files[i];
-      const short = f ? path.posix.basename(f.name) : `file ${i}`;
-      if (!f || !finished(f)) throw new Error(`“${short}” hasn’t finished downloading.`);
-      const had = inLibrary(f.name);
-      if (had) {
-        job.videoId ??= had.id;
-        await addToPlaylist(had.id);
-        continue;
-      }
-      const from = mapPath(path.posix.join(t.downloadDir, f.name), map);
-      const size = await stat(from).then(
-        (s) => s.size,
-        () => null,
-      );
-      if (size === null) throw new Error(`Can’t find ${from}. Does MEDIA_TRANSMISSION_PATHS map Transmission’s folders to this machine’s?`);
-
-      job.state = "downloading";
-      const dir = await incomingDir();
-      const file = path.join(dir, `torrent${path.extname(f.name).toLowerCase().replace(/[^a-z0-9.]/g, "")}`);
-      try {
-        await copy(from, file, signal, (bytes) => {
-          copied += bytes;
-          const seconds = (Date.now() - started) / 1000;
-          job.progress = total ? Math.min(1, copied / total) : null;
-          job.speed = seconds > 0 ? copied / seconds : undefined;
-          job.eta = job.speed ? (total - copied) / job.speed : undefined;
-        });
-        // The torrent may be deleted next: what's here must be all of it.
-        const got = (await stat(file)).size;
-        if (got !== f.length) throw new Error(`“${short}” copied ${got} of ${f.length} bytes.`);
-        job.state = "processing";
-        const v = await addVideo(
-          file,
-          { title: titleOf(f.name), source: "torrent", originalName: f.name, torrentHash: imp.hash, torrentName: t.name },
-          {
-            signal,
-            onConvert: () => {
-              job.converting = true;
-            },
-          },
-        );
-        job.converting = false;
-        job.videoId ??= v.id;
-        await addToPlaylist(v.id);
-      } catch (err) {
-        job.converting = false;
-        await rm(dir, { recursive: true, force: true });
-        if (signal.aborted) throw err;
-        throw new Error(imp.files.length > 1 ? `${short}: ${(err as Error).message}` : (err as Error).message);
-      }
-    }
-
+  for (const [n, i] of imp.files.entries()) {
     signal.throwIfAborted();
-    if (imp.remove) {
-      job.state = "processing";
-      await rpc("torrent-remove", { ids: [imp.hash], "delete-local-data": true });
+    imp.current = n;
+    const f = t.files[i];
+    const short = f ? path.posix.basename(f.name) : `file ${i}`;
+    if (!f || !finished(f)) throw new Error(`“${short}” hasn’t finished downloading.`);
+    const had = inLibrary(f.name);
+    if (had) {
+      job.videoId ??= had.id;
+      await addToPlaylist(had.id);
+      continue;
     }
-    job.state = "done";
-  } catch (err) {
-    job.state = "failed";
-    job.error = signal.aborted ? "Cancelled." : (err as Error).message;
-  } finally {
-    jobEnded(job);
+    const from = mapPath(path.posix.join(t.downloadDir, f.name), map);
+    const size = await stat(from).then(
+      (s) => s.size,
+      () => null,
+    );
+    if (size === null) throw new Error(`Can’t find ${from}. Does MEDIA_TRANSMISSION_PATHS map Transmission’s folders to this machine’s?`);
+
+    job.state = "downloading";
+    const dir = await incomingDir();
+    const file = path.join(dir, `torrent${path.extname(f.name).toLowerCase().replace(/[^a-z0-9.]/g, "")}`);
+    try {
+      await copy(from, file, signal, (bytes) => {
+        copied += bytes;
+        const seconds = (Date.now() - started) / 1000;
+        job.progress = total ? Math.min(1, copied / total) : null;
+        job.speed = seconds > 0 ? copied / seconds : undefined;
+        job.eta = job.speed ? (total - copied) / job.speed : undefined;
+      });
+      // The torrent may be deleted next: what's here must be all of it.
+      const got = (await stat(file)).size;
+      if (got !== f.length) throw new Error(`“${short}” copied ${got} of ${f.length} bytes.`);
+      job.state = "processing";
+      const v = await addVideo(
+        file,
+        { title: titleOf(f.name), source: "torrent", originalName: f.name, torrentHash: imp.hash, torrentName: t.name },
+        {
+          signal,
+          onConvert: () => {
+            job.converting = true;
+          },
+        },
+      );
+      job.converting = false;
+      job.videoId ??= v.id;
+      await addToPlaylist(v.id);
+    } catch (err) {
+      job.converting = false;
+      await rm(dir, { recursive: true, force: true });
+      if (signal.aborted) throw err;
+      throw new Error(imp.files.length > 1 ? `${short}: ${(err as Error).message}` : (err as Error).message);
+    }
+  }
+
+  signal.throwIfAborted();
+  if (imp.remove) {
+    job.state = "processing";
+    await rpc("torrent-remove", { ids: [imp.hash], "delete-local-data": true });
   }
 }

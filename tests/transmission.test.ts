@@ -4,7 +4,7 @@ import { access, readdir } from "node:fs/promises";
 import path from "node:path";
 import { after, before, test } from "node:test";
 import { startStub } from "../e2e/stub-transmission.mjs";
-import { getJob } from "../lib/downloads.ts";
+import { getJob } from "../lib/jobs.ts";
 import { isActive } from "../lib/types.ts";
 import { getVideo } from "../lib/library.ts";
 import { INCOMING_DIR, MEDIA_DIR } from "../lib/paths.ts";

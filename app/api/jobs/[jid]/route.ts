@@ -1,4 +1,4 @@
-import { dismiss } from "@/lib/downloads";
+import { dismiss } from "@/lib/jobs";
 import { noContent, notFound, route } from "@/lib/route";
 
 export const dynamic = "force-dynamic";

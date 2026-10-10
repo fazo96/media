@@ -1,5 +1,5 @@
 import Library from "@/components/Library";
-import { listJobs } from "@/lib/downloads";
+import { listJobs } from "@/lib/jobs";
 import { listVideos } from "@/lib/library";
 import { listPlaylists } from "@/lib/playlists";
 import { getDiskUsage } from "@/lib/disk";
