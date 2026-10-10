@@ -63,6 +63,12 @@ export const IconClose = (p: P) => (
   </svg>
 );
 
+export const IconPlus = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M10 4v12M4 10h12" />
+  </svg>
+);
+
 export const IconBack = (p: P) => (
   <svg {...base} {...p}>
     <path d="M12 4.5L6.5 10l5.5 5.5" />

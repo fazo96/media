@@ -9,6 +9,7 @@
 | `GET /api/videos/<id>/thumb` | The still (the page adds `?v=<addedAt>` so a re-download's isn't hidden by the cache) |
 | `POST /api/videos/<id>/progress` | `{ position, started?, ended? }`: `started` counts a play, `ended` resets the position. Read as text, so `sendBeacon` works |
 | `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) |
+| `GET /api/search?q=…` | Search YouTube ([downloads](downloads.md#searching)): up to 20 videos, `SearchResult[]`; 400 for an empty or over-200-character query, 502 with yt-dlp's error, 504 after 60s |
 | `GET /api/tools` | yt-dlp, ffmpeg, ffprobe: how each runs, its version |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 

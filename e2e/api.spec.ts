@@ -69,3 +69,15 @@ test("a YouTube download runs, lands in the library, and isn't repeated", async 
   expect((await request.delete(`/api/jobs/${job.id}`)).status()).toBe(204);
   await request.delete(`/api/videos/${again.video.id}`);
 });
+
+test("a YouTube search finds videos, not live streams", async ({ request }) => {
+  const found = await (await request.get("/api/search?q=api search")).json();
+  expect(found).toEqual([
+    { youtubeId: "sapisearch1", title: "Found api search 1", channel: "Stub channel", duration: 30, views: 1234 },
+    { youtubeId: "sapisearch2", title: "Found api search 2", channel: "Stub channel", duration: 95, views: 2468 },
+    { youtubeId: "sapisearch3", title: "Found api search 3", channel: "Stub channel", duration: 4000, views: 3702 },
+  ]);
+  expect(await (await request.get("/api/search?q=nothing")).json()).toEqual([]);
+  expect((await request.get("/api/search?q=%20")).status()).toBe(400);
+  expect((await request.get(`/api/search?q=${"a".repeat(201)}`)).status()).toBe(400);
+});

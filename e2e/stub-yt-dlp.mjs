@@ -6,6 +6,21 @@ import path from "node:path";
 
 const args = process.argv.slice(2);
 const id = args.at(-1);
+
+// A search ("ytsearchN:<query>") finds three videos named after the query, the
+// first with the id "s" + the query (padded to 11 characters), and a live
+// stream that has to be left out. Query "nothing" finds nothing.
+const search = /^ytsearch\d*:(.*)$/s.exec(id);
+if (search) {
+  const query = search[1];
+  if (query !== "nothing") {
+    const base = `s${query.replace(/[^A-Za-z0-9]/g, "")}`.padEnd(10, "0").slice(0, 10);
+    for (const [n, duration] of [[1, 30], [2, 95], [3, 4000], [4, null]]) {
+      console.log(JSON.stringify({ _type: "url", ie_key: "Youtube", id: `${base}${n}`, title: `Found ${query} ${n}`, channel: "Stub channel", duration, view_count: 1234 * n }));
+    }
+  }
+  process.exit(0);
+}
 const outputs = [];
 for (let i = 0; i < args.length; i++) if (args[i] === "-o") outputs.push(args[i + 1]);
 const videoTemplate = outputs.find((o) => !/^\w+:/.test(o));

@@ -2,13 +2,14 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, requestYoutube, uploadVideo } from "@/lib/api";
+import { api, ApiError, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
 import { local } from "@/lib/storage";
 import type { Job, Video } from "@/lib/types";
 import { parseYoutube } from "@/lib/youtube";
 import JobCard, { type Upload, UploadCard } from "./JobCard";
 import { IconLink, IconSearch, IconSettings, IconUpload } from "./icons";
 import Logo from "./Logo";
+import SearchResults, { type Search } from "./SearchResults";
 import ThemeButton from "./ThemeButton";
 import VideoCard from "./VideoCard";
 
@@ -44,6 +45,7 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
   const [link, setLink] = useState("");
+  const [search, setSearch] = useState<Search | null>(null);
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
@@ -125,9 +127,34 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
     }
   }, []);
 
+  // Anything that isn't a link is a YouTube search; a newer one replaces it.
+  const searching = useRef<AbortController | null>(null);
+  const runSearch = async (query: string) => {
+    searching.current?.abort();
+    const abort = new AbortController();
+    searching.current = abort;
+    setNotice(null);
+    setSearch({ query, results: null });
+    try {
+      const results = await searchYoutube(query, abort.signal);
+      setSearch({ query, results });
+    } catch (err) {
+      if (abort.signal.aborted) return;
+      setSearch({ query, results: null, error: err instanceof ApiError ? err.message : "Can’t reach the server." });
+    }
+  };
+  const closeSearch = () => {
+    searching.current?.abort();
+    setSearch(null);
+  };
+
+  const isLink = !link.trim() || parseYoutube(link) !== null;
   const submitLink = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (link.trim() && (await addLink(link))) setLink("");
+    const text = link.trim();
+    if (!text) return;
+    if (!isLink) void runSearch(text);
+    else if (await addLink(text)) setLink("");
   };
 
   // Uploads go one after another: a phone's connection is better spent on one at a time.
@@ -264,19 +291,18 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
       <main className="library">
         <section className="add" aria-label="Add videos">
           <form className="add-link" onSubmit={submitLink}>
-            <IconLink />
+            {isLink ? <IconLink /> : <IconSearch />}
             <input
               type="text"
-              inputMode="url"
-              placeholder="Paste a YouTube link or video id"
+              placeholder="Paste a YouTube link, or search YouTube"
               value={link}
               onChange={(e) => setLink(e.target.value)}
-              aria-label="YouTube link or video id"
+              aria-label="YouTube link or search"
               autoComplete="off"
               spellCheck={false}
             />
             <button type="submit" className="btn btn-primary" disabled={!link.trim()}>
-              Download
+              {isLink ? "Download" : "Search"}
             </button>
           </form>
           <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
@@ -303,6 +329,8 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
             </button>
           </p>
         )}
+
+        {search && <SearchResults search={search} videos={videos} jobs={jobs} onAdd={(ytId) => void addLink(ytId)} onClose={closeSearch} />}
 
         {empty ? (
           <section className="empty">

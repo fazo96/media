@@ -5,8 +5,8 @@ import path from "node:path";
 import { youtubeVideoId } from "./ids";
 import { addVideo, getVideo, incomingDir } from "./library";
 import { run } from "./tools";
-import type { Job } from "./types";
-import { youtubeUrl } from "./youtube";
+import type { Job, SearchResult } from "./types";
+import { parseYoutube, youtubeUrl } from "./youtube";
 
 // YouTube downloads (docs/downloads.md): a queue in memory, one yt-dlp at a
 // time. Jobs that end stay listed (done or failed) until dismissed or the
@@ -165,3 +165,42 @@ async function download(job: Job) {
 
 /** The video already in the library for this YouTube id, if any. */
 export const existing = (ytId: string) => getVideo(youtubeVideoId(ytId));
+
+/** How many videos a search asks YouTube for. */
+const SEARCH_RESULTS = 20;
+
+type Entry = { id?: unknown; ie_key?: unknown; title?: unknown; channel?: unknown; uploader?: unknown; duration?: unknown; view_count?: unknown };
+
+/**
+ * yt-dlp's --dump-json lines for a search, as results. Only videos, and only
+ * ones with a length: live streams have none, and their download never ends.
+ */
+export function parseSearch(out: string): SearchResult[] {
+  const results: SearchResult[] = [];
+  for (const line of out.split("\n")) {
+    let e: Entry;
+    try {
+      e = JSON.parse(line);
+    } catch {
+      continue;
+    }
+    const id = typeof e.id === "string" ? parseYoutube(e.id) : null;
+    if (!id || (e.ie_key !== undefined && e.ie_key !== "Youtube")) continue;
+    if (typeof e.duration !== "number" || !(e.duration > 0)) continue;
+    if (results.some((r) => r.youtubeId === id)) continue;
+    results.push({
+      youtubeId: id,
+      title: typeof e.title === "string" && e.title ? e.title : id,
+      channel: typeof e.channel === "string" ? e.channel : typeof e.uploader === "string" ? e.uploader : undefined,
+      duration: e.duration,
+      views: typeof e.view_count === "number" ? e.view_count : undefined,
+    });
+  }
+  return results;
+}
+
+/** Search YouTube. --flat-playlist reads only the results page, not each video, so it takes seconds. */
+export async function searchYoutube(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
+  const out = await run("yt-dlp", ["--flat-playlist", "--dump-json", "--no-warnings", "--", `ytsearch${SEARCH_RESULTS}:${query}`], { signal });
+  return parseSearch(out);
+}

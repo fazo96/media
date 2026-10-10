@@ -3,7 +3,7 @@
 // throws an ApiError carrying the server's own message ({ error } in the body).
 // Uploads (with progress) and beacons use XHR and sendBeacon directly.
 
-import type { Job, Video } from "./types";
+import type { Job, SearchResult, Video } from "./types";
 
 export class ApiError extends Error {
   status: number;
@@ -65,6 +65,10 @@ export function uploadVideo(file: File, onProgress: (sent: number) => void, sign
 /** Ask for a YouTube video: either it's in the library already, or a download starts. */
 export const requestYoutube = (url: string, replace = false) =>
   api<{ video?: Video; job?: Job }>("/api/jobs", { method: "POST", json: { url, replace } });
+
+/** Search YouTube: what it finds (each one can then go to requestYoutube). */
+export const searchYoutube = (query: string, signal?: AbortSignal) =>
+  api<SearchResult[]>(`/api/search?q=${encodeURIComponent(query)}`, { signal });
 
 /** Where the player is. As a beacon when the page is going away (it outlives the page). */
 export function saveProgress(id: string, body: { position: number; started?: boolean; ended?: boolean }, beacon = false) {

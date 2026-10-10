@@ -11,6 +11,7 @@ A self-hosted library for the videos you come back to. Drop files in or paste Yo
 
 - **Drop video files** anywhere on the page, or pick them with **Add files**. They're streamed to the server, so size doesn't matter. A file in the wrong container (an mkv with H.264, say) is repacked into one browsers play, in seconds and without re-encoding. One a browser can't play at all (HEVC, mostly) still goes in the library, with a warning.
 - **Paste a YouTube link**, or just its id, into the box or anywhere on the page. [yt-dlp](https://github.com/yt-dlp/yt-dlp) downloads it in the background, preferring H.264 so it plays everywhere, up to 1080p. Pasting the same video again finds the copy you already have.
+- **Search YouTube** from the same box: type anything that isn't a link, and add a result to the library with one click.
 - **Play** it. The player picks up where you left off, counts how often you watch, and takes YouTube's keys (Space/K, J/L, arrows, F, M).
 - The library sorts by recently watched, most watched, recently added, or A–Z, and you can search it. You can rename videos, download them again, or delete them, which moves them to a trash folder.
 - **Your files, plain.** Each video is a folder holding the video file, a `meta.json` and a thumbnail. There's no database.

@@ -6,6 +6,7 @@ Server-rendered with every video and the current downloads, then kept fresh in t
 
 - **Drop** video files anywhere on the page (a window-level drag listener shows the drop target), or **Add files**. Uploads go one at a time (XHR, for upload progress; `uploadVideo` in `lib/api.ts`) and show as cards until their video replaces them.
 - **Paste** a YouTube link in the box, or anywhere on the page outside a text field: a link `parseYoutube` recognizes starts a download straight away. Pasted files upload.
+- **Search** YouTube from the same box: text that isn't a link turns the button into "Search", and the results (`components/SearchResults.tsx`) show above the library. `+` downloads one like a pasted link; one downloading says so, and one already in the library says "In the library" and plays from its still. A new search cancels the one under way; `×` closes them.
 - While a download is active the page polls `GET /api/jobs` every second. A finished job's card disappears and the list is refetched; failed ones stay with their error, a retry and a dismiss.
 
 Sorting (recently watched, most watched, recently added, A–Z) is remembered per device (localStorage `media:sort`). "Recently watched" puts never-watched videos at the time they were added. Search filters by title, channel and file name. Each card's `⋯` menu renames, re-downloads or opens a YouTube video, and deletes (to the trash, after a confirm).

@@ -12,3 +12,7 @@
 - `--newline --progress-template` prints `media-progress <done> <total> <estimate> <speed> <eta>` lines, read by `parseProgress()`. Video and audio come down one after the other; when progress jumps back, `stream` goes up (the page says "audio").
 
 The result goes through `addVideo()` like a dropped file ([library](library.md#adding-a-video)), under the id `youtubeVideoId()`. A failure keeps yt-dlp's last `ERROR:` line as the job's error (`lastError()` in `lib/tools.ts`).
+
+## Searching
+
+`searchYoutube()` runs `yt-dlp --flat-playlist --dump-json -- ytsearch20:<query>`: `--flat-playlist` reads only the results page, not each video, so a search takes a second or two. It doesn't use the queue. `parseSearch()` keeps one `SearchResult` per video (id, title, channel, duration, views) and drops anything without a length, since live streams have none and their download would never finish. A result is added with the same `POST /api/jobs`, and the thumbnails come straight from `i.ytimg.com`, as the job cards' do.

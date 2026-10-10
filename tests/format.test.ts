@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatAgo, formatDuration, formatSize } from "../lib/format.ts";
+import { formatAgo, formatDuration, formatSize, formatViews } from "../lib/format.ts";
 
 test("formatDuration", () => {
   assert.equal(formatDuration(0), "0:00");
@@ -21,4 +21,11 @@ test("formatAgo", () => {
   assert.equal(formatAgo(now - 5 * 60_000, now), "5 min ago");
   assert.equal(formatAgo(now - 3600_000, now), "1 hour ago");
   assert.equal(formatAgo(now - 3 * 86400_000, now), "3 days ago");
+});
+
+test("formatViews", () => {
+  assert.equal(formatViews(1), "1 view");
+  assert.equal(formatViews(950), "950 views");
+  assert.equal(formatViews(1234), "1.2K views");
+  assert.equal(formatViews(13_987_991), "14M views");
 });

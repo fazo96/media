@@ -121,6 +121,34 @@
   padding: 40px 0;
 }
 
+.none.is-error {
+  color: var(--danger);
+}
+
+/* What a YouTube search found, above the library. */
+.results {
+  margin-bottom: 28px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--rule);
+}
+
+.results .shelf-head {
+  flex-wrap: nowrap;
+}
+
+.results .shelf-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.results-query {
+  margin-left: 4px;
+  font-weight: 450;
+  color: var(--ink-soft);
+}
+
 /* ─── A card ─────────────────────────────────────────────── */
 .card {
   position: relative;

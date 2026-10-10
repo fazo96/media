@@ -55,4 +55,14 @@ export type Job = {
   createdAt: number;
 };
 
+/** A video found by searching YouTube (GET /api/search). */
+export type SearchResult = {
+  youtubeId: string;
+  title: string;
+  channel?: string;
+  /** Seconds. */
+  duration: number;
+  views?: number;
+};
+
 export type ToolStatus = { name: string; command: string[] | null; version?: string; error?: string };

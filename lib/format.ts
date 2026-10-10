@@ -22,6 +22,10 @@ export function formatSize(bytes: number): string {
   return `${i === 0 ? n : n.toFixed(n < 10 ? 1 : 0)} ${units[i]}`;
 }
 
+/** 13987991 → "14M views". */
+export const formatViews = (n: number) =>
+  `${new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 1 }).format(n)} ${n === 1 ? "view" : "views"}`;
+
 /** How long ago `at` was, roughly: "just now", "5 min ago", "3 days ago". */
 export function formatAgo(at: number, now = Date.now()): string {
   const s = Math.max(0, (now - at) / 1000);
