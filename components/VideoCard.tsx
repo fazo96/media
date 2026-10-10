@@ -73,7 +73,10 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
         {mode === "delete" ? (
           <Confirm question="Move to the trash?" onConfirm={remove} onCancel={() => setMode("idle")} />
         ) : (
-          <p className="card-meta">{meta}</p>
+          // "5 min ago" can tick over between the server's render and the browser's: either will do.
+          <p className="card-meta" suppressHydrationWarning>
+            {meta}
+          </p>
         )}
         {error && (
           <p className="card-meta is-error" role="alert">

@@ -319,7 +319,8 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
 
           <div className="watch-info">
             <h1 className="watch-title">{v.title}</h1>
-            <p className="watch-meta">
+            {/* "added 5 min ago" can tick over between the server's render and the browser's: either will do. */}
+            <p className="watch-meta" suppressHydrationWarning>
               {v.source === "youtube" ? (v.channel ?? "YouTube") : music && v.channel ? v.channel : (v.originalName?.split("/").pop() ?? "File")}
               {" · "}
               {playsLabel(v)}
