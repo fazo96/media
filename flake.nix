@@ -4,7 +4,7 @@
   inputs.nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
 
   outputs =
-    { nixpkgs, ... }:
+    { self, nixpkgs, ... }:
     let
       systems = [
         "x86_64-linux"
@@ -22,25 +22,35 @@
       ];
     in
     {
-      devShells = forAllSystems (pkgs: {
-        default = pkgs.mkShell {
-          packages = tools pkgs;
-          shellHook = ''
-            export PATH="$PWD/node_modules/.bin:$PATH"
-          '';
-        };
-      }
-      // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
-        # The browser tests (npm run test:e2e): the same, plus a Chromium for
-        # Playwright, since the browsers it downloads don't run on NixOS.
-        e2e = pkgs.mkShell {
-          packages = tools pkgs ++ [ pkgs.chromium ];
-          shellHook = ''
-            export PATH="$PWD/node_modules/.bin:$PATH"
-            export MEDIA_E2E_CHROMIUM=${pkgs.chromium}/bin/chromium
-          '';
-        };
+      packages = nixpkgs.lib.genAttrs [ "x86_64-linux" "aarch64-linux" ] (system: rec {
+        media = nixpkgs.legacyPackages.${system}.callPackage ./nix/package.nix { };
+        default = media;
       });
+
+      nixosModules.default = import ./nix/module.nix { inherit self; };
+
+      devShells = forAllSystems (
+        pkgs:
+        {
+          default = pkgs.mkShell {
+            packages = tools pkgs;
+            shellHook = ''
+              export PATH="$PWD/node_modules/.bin:$PATH"
+            '';
+          };
+        }
+        // pkgs.lib.optionalAttrs pkgs.stdenv.hostPlatform.isLinux {
+          # The browser tests (npm run test:e2e): the same, plus a Chromium for
+          # Playwright, since the browsers it downloads don't run on NixOS.
+          e2e = pkgs.mkShell {
+            packages = tools pkgs ++ [ pkgs.chromium ];
+            shellHook = ''
+              export PATH="$PWD/node_modules/.bin:$PATH"
+              export MEDIA_E2E_CHROMIUM=${pkgs.chromium}/bin/chromium
+            '';
+          };
+        }
+      );
 
       formatter = forAllSystems (pkgs: pkgs.nixfmt-rfc-style);
     };

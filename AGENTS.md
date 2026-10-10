@@ -14,8 +14,8 @@ A self-hosted library of the videos you watch again: drop files in or paste YouT
 
 ## Before you change anything
 
-- **Never write to `data/`**: it holds the user's real library. Test against a scratch one (`MEDIA_DIR=<scratch dir>`).
-- **Don't run `next build` in this checkout**, and leave the server on port 3300 alone: it's the user's media (media.trippy.pizza), and the user builds, starts and redeploys it. When a change needs a redeploy, say so. Try builds in a scratch worktree ([development](docs/development.md)).
+- **Never touch the user's library** (`/mnt/BigStorage/Files/Media` on the server) or the running service on port 3300: it's the user's media (media.trippy.pizza). Test against a scratch library (`MEDIA_DIR=<scratch dir>`) and port.
+- The user's media is a NixOS service built from `main` on GitHub (`nix/`, used by the dotfiles repo), not this checkout: building here is fine. When a change needs a redeploy, say so; the user deploys it ([development](docs/development.md#redeploying)).
 - Next allows one `next dev` per checkout, and the browser tests start their own: stop yours first.
 - Node, yt-dlp and ffmpeg come from `nix develop`. Check your work with `npm test`, `npm run typecheck`, `npm run lint` and the browser suite ([testing](docs/testing.md)).
 - Keep these docs true: when you change how something works, update its page below.
@@ -24,7 +24,7 @@ A self-hosted library of the videos you watch again: drop files in or paste YouT
 
 | Page | What's in it |
 | --- | --- |
-| [docs/development.md](docs/development.md) | Running it, the running server, the tools it needs, stopping servers, the service worker, Docker |
+| [docs/development.md](docs/development.md) | Running it, the running service and redeploying, Nix (the package and the module), the tools it needs, stopping servers, the service worker, Docker |
 | [docs/testing.md](docs/testing.md) | Unit tests, the Playwright browser suite and its yt-dlp stub |
 | [docs/library.md](docs/library.md) | The library on disk (`lib/library.ts`, `lib/playlists.ts`): layout, ids, adding a video (probe, remux, thumbnail), playlists, the trash |
 | [docs/downloads.md](docs/downloads.md) | YouTube downloads (`lib/downloads.ts`): the queue, yt-dlp’s arguments, progress, search, playlists |

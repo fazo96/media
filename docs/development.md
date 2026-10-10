@@ -2,24 +2,30 @@
 
 ## Running it
 
-`nix develop` gives a shell with Node 24, yt-dlp and ffmpeg (`flake.nix`). Then `npm install`, and `npm run dev` or `npm run build && npm start` (add `-H 0.0.0.0 -p <port>` to reach it from other devices). The library is `./data` unless `MEDIA_DIR` says otherwise; **never write to the user's `data/`** while testing: use `MEDIA_DIR=<scratch dir>`.
+`nix develop` gives a shell with Node 24, yt-dlp and ffmpeg (`flake.nix`). Then `npm install`, and `npm run dev` or `npm run build && npm start` (add `-H 0.0.0.0 -p <port>` to reach it from other devices). The library is `./data` unless `MEDIA_DIR` says otherwise. While testing, use `MEDIA_DIR=<scratch dir>` and **never point it at the user's library** (`/mnt/BigStorage/Files/Media` on the server).
 
 ## The running server
 
-The user's media usually runs from this checkout as a production build on port 3300 (`nix develop --command npm start -- -H 0.0.0.0 -p 3300`), public as media.trippy.pizza behind nginx (the vhost is in the dotfiles repo, `devices/ada.nix`: unbuffered and without a body size limit, so uploads stream through). Leave it running, and **don't run `next build` here** while it does: it rewrites the `.next` that server is using. To try a build, build in a scratch worktree instead (`git worktree add <dir>`, copy the working-tree changes in, `cp -a --reflink=auto node_modules <dir>/`; Turbopack rejects a symlinked `node_modules`), and `git worktree remove` it afterwards.
+The user's media runs as the NixOS service `media` (`services.media` in the dotfiles repo, `devices/ada.nix`) on port 3300, public as media.trippy.pizza behind nginx (the vhost is in the same file: unbuffered and without a body size limit, so uploads stream through). It's built from `main` on GitHub, not from this checkout, so `next build` here doesn't touch it. Leave the service alone: don't stop, restart or redeploy it.
 
 ### Redeploying
 
-**The user builds, starts and stops this server; agents don't.** Work on the code and commit it; when it's ready, tell the user it needs a redeploy rather than doing it (no stopping the server, `npm run build` or `npm start` here).
+**The user deploys; agents don't.** Commit and push to `main`; when a change is ready, tell the user it needs a redeploy.
 
 For the user's reference:
 
-1. Check nothing is downloading: a restart drops the queue. `curl -s localhost:3300/api/jobs` is `[]` (with the lock on it answers `locked`; then no `yt-dlp` process and an empty `data/.incoming/` say the same).
-2. Stop the server (`npm start` and its `next-server`, found by port and working directory: see [stopping servers](#stopping-servers-you-started)); wait until `ss -ltn` no longer shows :3300.
-3. `nix develop --command npm run build` in this checkout.
-4. Start it again in the background with the command above, then check `curl localhost:3300/` and https://media.trippy.pizza/ answer 200.
+1. Check nothing is downloading: a restart drops the queue. `curl -s localhost:3300/api/jobs` is `[]` (with the lock on it answers `locked`; then no `yt-dlp` process and an empty `.incoming/` in the library say the same).
+2. In the dotfiles repo: `nix flake update media`, then `sudo nixos-rebuild switch --flake .#ada`. The service restarts on the new build; `journalctl -u media` shows its log.
+3. Check `curl localhost:3300/` and https://media.trippy.pizza/ answer 200.
 
-A `.next` built elsewhere (a worktree) can be copied in instead, to keep the downtime to seconds, but `.next/required-server-files.json` and `.js` hold the absolute path it was built in: replace it with this checkout's.
+## Nix
+
+`flake.nix` gives the dev shells, `packages.default` (`nix build`) and `nixosModules.default` (`services.media`). The recipes are in `nix/`:
+
+- `package.nix` builds media with `npm run build` and installs the build, `node_modules` and `public/` into a read-only `lib/media`. `bin/media` runs `next start` there, with `MEDIA_YTDLP`, `MEDIA_FFMPEG` and `MEDIA_FFPROBE` pointing at nixpkgs' yt-dlp and ffmpeg (yt-dlp brings deno for YouTube's challenges). Dependencies come straight from `package-lock.json` (`importNpmLock`), so no hash needs updating when they change.
+- `module.nix` is the service: the library is `services.media.dataDir` (`MEDIA_DIR`), the home directory is off limits, and yt-dlp's cache goes in `/var/cache/media`.
+
+`nix build` checks the package builds; run `result/bin/media -p 3301` with a scratch `MEDIA_DIR` to try it. yt-dlp is as new as the nixpkgs in the dotfiles' lock: update that (`nix flake update nixpkgs`) when downloads break.
 
 ## The tools
 

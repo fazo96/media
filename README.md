@@ -38,6 +38,27 @@ If yt-dlp or ffmpeg isn't on PATH but `nix` is, media runs them through `nix she
 
 YouTube changes often and yt-dlp follows it. When downloads start failing, update yt-dlp first.
 
+## NixOS
+
+The flake has a package (yt-dlp and ffmpeg included) and a NixOS module:
+
+```nix
+# flake.nix
+inputs.media = {
+  url = "github:fazo96/media";
+  inputs.nixpkgs.follows = "nixpkgs";
+};
+
+# in nixosSystem's modules: media.nixosModules.default, then
+services.media = {
+  enable = true;
+  port = 3300; # listens on 127.0.0.1; put a reverse proxy in front
+  dataDir = "/var/lib/media"; # the library
+};
+```
+
+Upgrade with `nix flake update media` and a rebuild; yt-dlp comes from your nixpkgs, so update that when downloads break.
+
 ## Docker
 
 ```sh
