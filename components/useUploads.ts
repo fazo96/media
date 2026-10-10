@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { errorMessage, uploadVideo } from "@/lib/api";
-import type { Video } from "@/lib/types";
+import type { AddOptions, Video } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
 import type { Upload } from "./JobCard";
 
@@ -12,12 +12,18 @@ const MEDIA_EXT = /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp|mp3|m4a|m4b|flac|o
 /** The file chooser's `accept`. */
 export const MEDIA_ACCEPT = "video/*,audio/*,.mkv,.m4v,.mov,.webm,.avi,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma";
 
+type UploadProps = { onAdded: (v: Video, options: AddOptions) => void; onRefused: (text: string) => void; options?: AddOptions };
+
+const NONE: AddOptions = {};
+
 /**
  * Files going up to the library, one after another (a phone's connection is
  * better spent on one at a time), each shown until its video takes its place.
- * `onAdded` gets each video; `onRefused` says why a batch had nothing to send.
+ * `options` (as music, into playlists) are the ones when a file was added;
+ * `onAdded` gets each video, with them. `onRefused` says why a batch had
+ * nothing to send.
  */
-export function useUploads({ onAdded, onRefused }: { onAdded: (v: Video) => void; onRefused: (text: string) => void }) {
+export function useUploads({ onAdded, onRefused, options = NONE }: UploadProps) {
   const [uploads, setUploads] = useState<Upload[]>([]);
   const queue = useRef<Promise<void>>(Promise.resolve());
 
@@ -36,8 +42,8 @@ export function useUploads({ onAdded, onRefused }: { onAdded: (v: Video) => void
         queue.current = queue.current.then(async () => {
           set({ state: "sending" });
           try {
-            const video = await uploadVideo(file, (sent) => set({ sent, state: sent >= 1 ? "processing" : "sending" }));
-            onAdded(video);
+            const video = await uploadVideo(file, (sent) => set({ sent, state: sent >= 1 ? "processing" : "sending" }), options);
+            onAdded(video, options);
             setUploads((prev) => prev.filter((u) => u.key !== up.key));
           } catch (err) {
             set({ state: "failed", error: errorMessage(err, "Upload interrupted.") });
@@ -46,7 +52,7 @@ export function useUploads({ onAdded, onRefused }: { onAdded: (v: Video) => void
       }
       return true;
     },
-    [onAdded, onRefused],
+    [onAdded, onRefused, options],
   );
 
   const dismiss = (key: string) => setUploads((prev) => prev.filter((u) => u.key !== key));

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSelector, parseProgress } from "../lib/downloads.ts";
+import { downloadArgs, formatSelector, MUSIC_FORMAT, parseProgress } from "../lib/downloads.ts";
 import { parsePlaylistInfo, parsePlaylistSearch, parseSearch } from "../lib/ytdlp.ts";
 import { lastError } from "../lib/tools.ts";
 
@@ -85,4 +85,15 @@ test("parsePlaylistInfo lists the videos it can download, and counts the rest", 
     unavailable: 1,
   });
   assert.deepEqual(parsePlaylistInfo(JSON.stringify({ title: "Empty" }), "PLy").videos, []);
+});
+
+test("downloadArgs asks for an mp4, or as music the audio alone", () => {
+  const video = downloadArgs("abcdefghijk", "/in");
+  assert.ok(video.includes("--merge-output-format"));
+  assert.equal(video[video.indexOf("-f") + 1], formatSelector());
+  assert.deepEqual(video.slice(-2), ["--", "abcdefghijk"]);
+  const music = downloadArgs("abcdefghijk", "/in", true);
+  assert.equal(music[music.indexOf("-f") + 1], MUSIC_FORMAT);
+  assert.ok(!music.includes("--merge-output-format"));
+  assert.ok(music.includes("--write-thumbnail"));
 });

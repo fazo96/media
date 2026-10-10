@@ -4,7 +4,7 @@ import PlaylistView from "@/components/PlaylistView";
 import { listJobs } from "@/lib/jobs";
 import { isValidId } from "@/lib/ids";
 import { listVideos } from "@/lib/library";
-import { getPlaylist } from "@/lib/playlists";
+import { getPlaylist, listPlaylists } from "@/lib/playlists";
 import { hasSession, requirePageSession } from "@/lib/session";
 import { inLibrary } from "@/lib/types";
 
@@ -23,6 +23,7 @@ export default async function Page({ params }: Props) {
   await requirePageSession(`/p/${id}`);
   const playlist = isValidId(id) ? await getPlaylist(id) : null;
   if (!playlist) notFound();
-  const videos = inLibrary(playlist.items, new Map((await listVideos()).map((v) => [v.id, v])));
-  return <PlaylistView key={playlist.id} initialPlaylist={playlist} initialVideos={videos} initialJobs={listJobs()} />;
+  const [all, playlists] = await Promise.all([listVideos(), listPlaylists()]);
+  const videos = inLibrary(playlist.items, new Map(all.map((v) => [v.id, v])));
+  return <PlaylistView key={playlist.id} initialPlaylist={playlist} initialPlaylists={playlists} initialVideos={videos} initialJobs={listJobs()} />;
 }

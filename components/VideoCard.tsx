@@ -17,7 +17,8 @@ type Props = {
   video: Video;
   onRemoved: (id: string) => void;
   onChanged: (v: Video) => void;
-  onRedownload: () => void;
+  /** Download a YouTube one again: as music, or as a video. */
+  onRedownload: (music: boolean) => void;
   playlists: Playlist[];
   onPlaylistChanged: (p: Playlist) => void;
   /** Picking: a click picks it instead of playing it. */

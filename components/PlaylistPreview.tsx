@@ -12,14 +12,16 @@ type Props = {
   preview: Preview;
   videos: Video[];
   jobs: Job[];
-  onAdd: (ytId: string) => void;
+  onAdd: (ytId: string, music?: boolean) => void;
+  /** What its videos are added as (the page's choice): music, or videos. */
+  music?: boolean;
   /** Download the whole playlist; resolves when it's queued. */
   onDownloadAll: () => Promise<void>;
   onClose: () => void;
 };
 
 /** A YouTube playlist read whole: each video a click away, or all of them at once. */
-export default function PlaylistPreview({ preview, videos, jobs, onAdd, onDownloadAll, onClose }: Props) {
+export default function PlaylistPreview({ preview, videos, jobs, onAdd, music, onDownloadAll, onClose }: Props) {
   const { playlist: yt, error } = preview;
   const [busy, setBusy] = useState(false);
   const missing = yt ? yt.videos.filter((r) => !videos.some((v) => v.youtubeId === r.youtubeId)).length : 0;
@@ -63,7 +65,7 @@ export default function PlaylistPreview({ preview, videos, jobs, onAdd, onDownlo
             )}
             {(missing > 0 || !yt.playlistId) && yt.videos.length > 0 && (
               <button type="button" className="btn btn-primary" onClick={downloadAll} disabled={busy}>
-                {missing > 0 ? `Download all (${missing} new)` : "Save as a playlist"}
+                {missing > 0 ? `Download all${music ? " as music" : ""} (${missing} new)` : "Save as a playlist"}
               </button>
             )}
           </div>
@@ -73,7 +75,7 @@ export default function PlaylistPreview({ preview, videos, jobs, onAdd, onDownlo
             <ul className="grid">
               {yt.videos.map((r) => (
                 <li key={r.youtubeId}>
-                  <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} listId={yt.youtubePlaylistId} />
+                  <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} music={music} listId={yt.youtubePlaylistId} />
                 </li>
               ))}
             </ul>

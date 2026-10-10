@@ -5,7 +5,7 @@ import { formatDuration, formatViews } from "@/lib/format";
 import { isActive, type Job, type PlaylistResult, type SearchResult, type SearchResults as Results, type Video } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
 import { watchHref } from "@/lib/youtube";
-import { IconClose, IconPlaylist, IconPlus } from "./icons";
+import { IconClose, IconFilm, IconHeadphones, IconPlaylist, IconPlus } from "./icons";
 import YtThumb from "./YtThumb";
 
 export type Search = { query: string; results: Results | null; error?: string };
@@ -14,7 +14,10 @@ type Props = {
   search: Search;
   videos: Video[];
   jobs: Job[];
-  onAdd: (ytId: string) => void;
+  /** Add it to the library: as the page says, or (`music`) as music or a video. */
+  onAdd: (ytId: string, music?: boolean) => void;
+  /** What `+` adds it as: music, or a video (the page's choice); the other button adds it as the other. */
+  music?: boolean;
   onOpenPlaylist: (listId: string) => void;
   onClose: () => void;
 };
@@ -23,13 +26,16 @@ type CardProps = {
   result: SearchResult;
   videos: Video[];
   jobs: Job[];
-  onAdd: (ytId: string) => void;
+  /** Add it to the library: as the page says, or (`music`) as music or a video. */
+  onAdd: (ytId: string, music?: boolean) => void;
+  /** What `+` adds it as: music, or a video (the page's choice); the other button adds it as the other. */
+  music?: boolean;
   /** The YouTube playlist it's listed in, for its preview's way back to it. */
   listId?: string;
 };
 
 /** A video on YouTube: in the library already (it plays), or previewed from its still, downloading, or a click away. */
-export function ResultCard({ result: r, videos, jobs, onAdd, listId }: CardProps) {
+export function ResultCard({ result: r, videos, jobs, onAdd, music = false, listId }: CardProps) {
   const video = videos.find((v) => v.youtubeId === r.youtubeId);
   const job = jobs.find((j) => j.youtubeId === r.youtubeId && isActive(j));
   const meta = [r.channel, r.views !== undefined ? formatViews(r.views) : null].filter(Boolean).join(" · ");
@@ -56,7 +62,22 @@ export function ResultCard({ result: r, videos, jobs, onAdd, listId }: CardProps
       </div>
       {!video && !job && (
         <div className="card-actions">
-          <button type="button" className="icon-btn" onClick={() => onAdd(r.youtubeId)} aria-label="Add to the library" title="Add to the library">
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAdd(r.youtubeId, !music)}
+            aria-label={music ? "Add as a video" : "Add as music"}
+            title={music ? "Add as a video" : "Add as music"}
+          >
+            {music ? <IconFilm /> : <IconHeadphones />}
+          </button>
+          <button
+            type="button"
+            className="icon-btn"
+            onClick={() => onAdd(r.youtubeId)}
+            aria-label={music ? "Add to the library as music" : "Add to the library"}
+            title={music ? "Add to the library as music" : "Add to the library"}
+          >
             <IconPlus />
           </button>
         </div>
@@ -88,7 +109,7 @@ function PlaylistResultCard({ result: r, onOpen }: { result: PlaylistResult; onO
 }
 
 /** What a YouTube search found, each one a click away from the library. */
-export default function SearchResults({ search, videos, jobs, onAdd, onOpenPlaylist, onClose }: Props) {
+export default function SearchResults({ search, videos, jobs, onAdd, music, onOpenPlaylist, onClose }: Props) {
   const { query, results, error } = search;
   const empty = results && results.videos.length === 0 && results.playlists.length === 0;
   return (
@@ -125,7 +146,7 @@ export default function SearchResults({ search, videos, jobs, onAdd, onOpenPlayl
           <ul className="grid" aria-label="Videos">
             {results.videos.map((r) => (
               <li key={r.youtubeId}>
-                <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} />
+                <ResultCard result={r} videos={videos} jobs={jobs} onAdd={onAdd} music={music} />
               </li>
             ))}
           </ul>

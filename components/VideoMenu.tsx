@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useRef, useState } from "react";
-import type { Playlist, Video } from "@/lib/types";
-import { IconEdit, IconExternal, IconMore, IconPlaylist, IconRefresh, IconTrash } from "./icons";
+import { isAudio, type Playlist, type Video } from "@/lib/types";
+import { IconEdit, IconExternal, IconFilm, IconHeadphones, IconMore, IconPlaylist, IconRefresh, IconTrash } from "./icons";
 import PlaylistPicker from "./PlaylistPicker";
 import { useDismiss } from "./useDismiss";
 
@@ -11,7 +11,8 @@ type Props = {
   playlists: Playlist[];
   onPlaylistChanged: (p: Playlist) => void;
   onRename: () => void;
-  onRedownload: () => void;
+  /** Download a YouTube one again: as music, or as a video. */
+  onRedownload: (music: boolean) => void;
   onDelete: () => void;
   onError: (message: string) => void;
 };
@@ -55,8 +56,12 @@ export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRe
           </button>
           {v.source === "youtube" && v.url && (
             <>
-              <button type="button" role="menuitem" onClick={pick(onRedownload)}>
+              <button type="button" role="menuitem" onClick={pick(() => onRedownload(isAudio(v)))}>
                 <IconRefresh /> Download again
+              </button>
+              {/* The other kind: a video kept as its audio alone, or music fetched again with its picture. */}
+              <button type="button" role="menuitem" onClick={pick(() => onRedownload(!isAudio(v)))}>
+                {isAudio(v) ? <IconFilm /> : <IconHeadphones />} Download again as {isAudio(v) ? "video" : "music"}
               </button>
               <a role="menuitem" href={v.url} target="_blank" rel="noreferrer" onClick={() => setMenu(false)}>
                 <IconExternal /> Open on YouTube

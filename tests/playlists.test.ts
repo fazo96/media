@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readdir } from "node:fs/promises";
 import { test } from "node:test";
 import { TRASH_DIR } from "../lib/paths.ts";
-import { appendOrCreate, createPlaylist, findPlaylist, getPlaylist, listPlaylists, trashPlaylist, updatePlaylist } from "../lib/playlists.ts";
+import { addToPlaylists, appendOrCreate, createPlaylist, findPlaylist, getPlaylist, listPlaylists, playlistIds, trashPlaylist, updatePlaylist } from "../lib/playlists.ts";
 
 test("playlists are made under their title's slug, and never overwrite one another", async () => {
   const a = await createPlaylist({ title: "Road Trip!" });
@@ -46,4 +46,26 @@ test("trashPlaylist moves it to the trash once", async () => {
   assert.equal(await getPlaylist(p.id), null);
   assert.equal(await trashPlaylist(p.id), false);
   assert.ok((await readdir(TRASH_DIR)).some((n) => n.startsWith(`playlist-${p.id}.`)));
+});
+
+test("addToPlaylists puts videos at the end of each, skipping playlists that are gone", async () => {
+  const a = await createPlaylist({ title: "Into A", items: ["x"] });
+  const b = await createPlaylist({ title: "Into B" });
+  const changed = await addToPlaylists([a.id, "not-there", b.id, a.id], ["y", "x"]);
+  assert.deepEqual(
+    changed.map((p) => [p.id, p.items]),
+    [
+      [a.id, ["x", "y"]],
+      [b.id, ["y", "x"]],
+    ],
+  );
+  assert.deepEqual((await getPlaylist(b.id))?.items, ["y", "x"]);
+});
+
+test("playlistIds reads a request's playlists", () => {
+  assert.deepEqual(playlistIds(undefined), []);
+  assert.deepEqual(playlistIds(["a", "b-2"]), ["a", "b-2"]);
+  assert.equal(playlistIds("a"), null);
+  assert.equal(playlistIds(["../etc"]), null);
+  assert.equal(playlistIds([1]), null);
 });

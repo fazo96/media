@@ -93,6 +93,8 @@ type JobBase = {
   videoId?: string;
   /** The playlist it was queued for, when a whole one was. */
   playlistId?: string;
+  /** Added as music: its audio alone (docs/library.md#music). */
+  music?: boolean;
   createdAt: number;
 };
 
@@ -222,9 +224,14 @@ export type TorrentImport = {
   remove: boolean;
   /** Put them in a playlist named after the torrent (Import all). */
   playlist?: boolean;
+  /** Playlists (ids) each one goes at the end of, once it's in. */
+  playlists?: string[];
   /** Which of `files` is being worked on (an index into it). */
   current: number;
 };
 
 /** GET /api/storage: bytes the library's videos and the trash take, and the disk they're on. */
 export type DiskUsage = { library: number; trash: number; free: number; total: number };
+
+/** How something is added to the library: as music (its audio alone), and into which playlists (ids). */
+export type AddOptions = { music?: boolean; playlists?: string[] };

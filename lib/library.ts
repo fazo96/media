@@ -142,18 +142,20 @@ async function keepMusic(file: string, ext: string, info: Probe, signal?: AbortS
  * thumbnail (unless `thumb` brings one), and write its meta.json. A music
  * file (audio, no video) is kept as it is or as its track alone, with its
  * cover art for a still, its tags' title and artist, and listen mode on.
- * `id` forces the id (YouTube's), replacing what's there. The incoming file
+ * `music` adds a video as music: its audio track alone, with a frame of it
+ * for a still (unless `thumb` brings one). `id` forces the id (YouTube's), replacing what's there. The incoming file
  * is moved or removed either way.
  */
 export async function addVideo(
   file: string,
   details: Details,
-  { id: wantId, thumb, signal, onConvert }: { id?: string; thumb?: string; signal?: AbortSignal; onConvert?: () => void } = {},
+  { id: wantId, thumb, music: asMusic, signal, onConvert }: { id?: string; thumb?: string; music?: boolean; signal?: AbortSignal; onConvert?: () => void } = {},
 ): Promise<Video> {
   const ext = path.extname(details.originalName ?? file).slice(1).toLowerCase();
   const info = await probe(file).catch(() => null);
   if (!info || (!info.videoCodec && info.audio.length === 0)) throw new NotAVideo("That file has no video or audio in it that ffmpeg can read.");
-  const music = isAudio(info);
+  if (asMusic && info.audio.length === 0) throw new NotAVideo("That has no audio in it to add as music.");
+  const music = asMusic || isAudio(info);
   const kept = await (music ? keepMusic : keepVideo)(file, ext, info, signal, onConvert);
   const track = info.audio[kept.audio];
 
@@ -166,7 +168,9 @@ export async function addVideo(
   try {
     if (still) await rename(still, path.join(staged, THUMB));
     else if (!music) await thumbnail(path.join(staged, kept.name), path.join(staged, THUMB), info.duration);
-    hasThumb = !!still || !music;
+    // A video added as music: a frame of the video it was, from the incoming file (still there).
+    else if (info.videoCodec) await thumbnail(file, path.join(staged, THUMB), info.duration);
+    hasThumb = !!still || !music || !!info.videoCodec;
   } catch {} // a video without a still is still a video
 
   const meta: Omit<Video, "id"> = {
@@ -200,7 +204,8 @@ export async function addVideo(
         playCount: old.playCount,
         lastPlayedAt: old.lastPlayedAt,
         position: old.position,
-        ...(old.listen ? { listen: true } : {}),
+        // Listen mode, from a video (music has it anyway, and a video from music starts without).
+        ...(old.listen && !isAudio(old) ? { listen: true } : {}),
       });
       await trashVideo(id);
     }

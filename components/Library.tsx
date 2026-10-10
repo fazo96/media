@@ -4,8 +4,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage, importTorrent } from "@/lib/api";
 import { isSort, SORTS, type Sort, sorted } from "@/lib/sort";
 import { local } from "@/lib/storage";
-import type { DiskUsage, Job, Playlist, Video } from "@/lib/types";
+import type { AddOptions as Options, DiskUsage, Job, Playlist, Video } from "@/lib/types";
 import AddBar from "./AddBar";
+import AddOptions, { useAddOptions } from "./AddOptions";
 import JobCard, { QueuedPlaylistCard, UploadCard } from "./JobCard";
 import { IconCheck, IconGrid, IconList, IconSearch, IconUpload } from "./icons";
 import Logo from "./Logo";
@@ -56,9 +57,19 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     local.set(VIEW_KEY, v);
   };
 
-  const yt = useYoutube({ keepJobs, say: setNotice });
+  const add = useAddOptions();
+  const yt = useYoutube({ keepJobs, keepPlaylist, say: setNotice, options: add.options });
   const { addLink } = yt;
-  const up = useUploads({ onAdded: lib.keepVideo, onRefused: say });
+  const { keepVideo, refresh } = lib;
+  // An upload into playlists changed them on the server: read them again.
+  const onUploaded = useCallback(
+    (v: Video, o: Options) => {
+      keepVideo(v);
+      if (o.playlists?.length) void refresh();
+    },
+    [keepVideo, refresh],
+  );
+  const up = useUploads({ onAdded: onUploaded, onRefused: say, options: add.options });
   const { addFiles } = up;
   const onFiles = useCallback(
     (files: File[]) => {
@@ -112,12 +123,13 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   const retryJob = async (j: Job) => {
     await lib.dismissJobs([j]);
     if (!j.torrent) {
-      await addLink(j.url ?? "", true);
+      // Its playlists have it already.
+      await addLink(j.url ?? "", { replace: true, music: j.music, playlists: [] });
       return;
     }
     // The files already in skip themselves.
     try {
-      keepJobs([(await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job]);
+      keepJobs([(await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist, j.torrent.playlists)).job]);
     } catch (err) {
       say(errorMessage(err));
     }
@@ -165,7 +177,12 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
 
       <main className={`library ${picking ? "is-picking" : ""}`}>
         <Tabs transmission={transmission} />
-        <AddBar onLink={addLink} onSearch={yt.runSearch} onFiles={onFiles} />
+        <AddBar
+          onLink={addLink}
+          onSearch={yt.runSearch}
+          onFiles={onFiles}
+          options={<AddOptions choice={add} playlists={playlists} onCreated={keepPlaylist} onError={say} />}
+        />
 
         {notice && (
           <Notice error={notice.error} onDismiss={() => setNotice(null)}>
@@ -233,7 +250,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
                       video={v}
                       onRemoved={lib.dropVideo}
                       onChanged={lib.keepVideo}
-                      onRedownload={() => addLink(v.url ?? "", true)}
+                      onRedownload={(music) => addLink(v.url ?? "", { replace: true, music, playlists: [] })}
                       playlists={playlists}
                       onPlaylistChanged={keepPlaylist}
                       pick={picking ? { on: selected.has(v.id), toggle: (range) => toggle(v.id, range) } : undefined}
@@ -249,7 +266,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
                     videos={shown}
                     onRemoved={lib.dropVideo}
                     onChanged={lib.keepVideo}
-                    onRedownload={(v) => addLink(v.url ?? "", true)}
+                    onRedownload={(v, music) => addLink(v.url ?? "", { replace: true, music, playlists: [] })}
                     playlists={playlists}
                     onPlaylistChanged={keepPlaylist}
                     picked={selected}
@@ -281,7 +298,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
         <div className="drop-target" aria-hidden="true">
           <div className="drop-card">
             <IconUpload />
-            <span>Drop to add to the library</span>
+            <span>Drop to add to the library{add.music ? " as music" : ""}</span>
           </div>
         </div>
       )}

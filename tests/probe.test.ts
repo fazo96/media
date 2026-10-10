@@ -140,3 +140,8 @@ test("planAudio keeps music browsers play as it is, and takes the rest's track o
   const two = p(MP4, undefined, a("aac", "eng", true), a("aac", "ita"));
   assert.deepEqual(planAudio(two, "m4a", ["ita"]), { audio: 1, asIs: null, container: "mp4", convert: false });
 });
+
+test("planAudio never keeps a video as it is: added as music, its track comes out alone", () => {
+  assert.deepEqual(planAudio(p(MP4, "h264", "aac"), "mp4"), { audio: 0, asIs: null, container: "mp4", convert: false });
+  assert.deepEqual(planAudio(p(MKV, "vp9", "opus"), "webm"), { audio: 0, asIs: null, container: "mp4", convert: false });
+});

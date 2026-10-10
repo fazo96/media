@@ -298,3 +298,73 @@ test("the grid's Select picks cards instead of playing them, and deletes them to
   await expect(page.locator(".grid > li")).toHaveCount(0);
   for (const v of [a, b]) expect((await request.get(`/api/videos/${v.id}`)).status()).toBe(404);
 });
+
+test("on a playlist's page, a dropped file and a pasted link go into it", async ({ page, request }) => {
+  const name = unique("Drop Into");
+  const { playlist } = await (await request.post("/api/playlists", { data: { title: name } })).json();
+  await page.goto(`/p/${playlist.id}`);
+  await expect(page.locator(".none")).toContainText("Drop files on this page");
+  await expect(page.getByRole("button", { name: "Playlists to add into" })).toContainText(`Into “${name}”`);
+
+  const file = unique("Dropped");
+  const bytes = (await import("node:fs")).readFileSync(FIXTURE).toString("base64");
+  const drag = await page.evaluateHandle(
+    ({ b64, name }) => {
+      const dt = new DataTransfer();
+      dt.items.add(new File([Uint8Array.from(atob(b64), (c) => c.charCodeAt(0))], name, { type: "video/mp4" }));
+      return dt;
+    },
+    { b64: bytes, name: `${file}.mp4` },
+  );
+  await page.dispatchEvent("main", "dragenter", { dataTransfer: drag });
+  await expect(page.locator(".drop-target")).toContainText(`Drop to add to “${name}”`);
+  await page.dispatchEvent("main", "drop", { dataTransfer: drag });
+  await expect(page.locator(".pl-item", { hasText: file })).toBeVisible({ timeout: 30_000 });
+
+  await page.getByLabel("YouTube link or search").fill("https://www.youtube.com/watch?v=intoList001");
+  await page.getByRole("button", { name: "Download", exact: true }).click();
+  // In the playlist straight away, downloading, then in the library.
+  const row = page.locator('.pl-item[data-item^="yt-intolist001-"]');
+  await expect(row).toBeVisible();
+  await expect(row).toContainText("Stub video intoList001", { timeout: 30_000 });
+  await expect(row.locator("a")).toBeVisible();
+  await expect(page.locator(".pl-item")).toHaveCount(2);
+});
+
+test("from the library, Music and a playlist picked: a file goes in as music, into the playlist", async ({ page, request }) => {
+  const name = unique("Songs");
+  const { playlist } = await (await request.post("/api/playlists", { data: { title: name } })).json();
+  await page.goto("/");
+  await page.getByRole("button", { name: "Music", exact: true }).click();
+  await page.getByRole("button", { name: "Playlists to add into" }).click();
+  await page.getByRole("menuitemcheckbox", { name }).click();
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("button", { name: "Playlists to add into" })).toContainText(`Into “${name}”`);
+
+  const file = unique("Clip As Song");
+  await page.locator('input[type="file"]').setInputFiles({ name: `${file}.mp4`, mimeType: "video/mp4", buffer: (await import("node:fs")).readFileSync(FIXTURE) });
+  const card = page.locator(".card", { hasText: file });
+  await expect(card.locator(".thumb.is-music")).toBeVisible({ timeout: 30_000 });
+  await expect.poll(async () => ((await (await request.get(`/api/playlists/${playlist.id}`)).json()) as { items: string[] }).items.length).toBe(1);
+  const id = ((await (await request.get(`/api/playlists/${playlist.id}`)).json()) as { items: string[] }).items[0];
+  const v = await (await request.get(`/api/videos/${id}`)).json();
+  expect(v.file).toBe("track.m4a");
+  expect(v.videoCodec).toBeUndefined();
+
+  // Music is remembered on this device.
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Music", exact: true })).toHaveAttribute("aria-pressed", "true");
+});
+
+test("a YouTube search result is added as music", async ({ page, request }) => {
+  const query = unique("m").replace(/\W/g, "");
+  await page.goto(`/search?q=${query}`);
+  const first = page.getByRole("list", { name: "Videos" }).locator(".card").first();
+  await first.getByRole("button", { name: "Add as music" }).click();
+  await expect(first).toContainText("In the library", { timeout: 30_000 });
+  const ytId = await first.getAttribute("data-result");
+  const v = (await (await request.get("/api/videos")).json()).find((x: { youtubeId?: string }) => x.youtubeId === ytId);
+  expect(v.file).toBe("track.m4a");
+  expect(v.listen).toBe(true);
+  expect(v.hasThumb).toBe(true);
+});

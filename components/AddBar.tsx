@@ -14,10 +14,12 @@ type Props = {
   onFiles?: (files: File[]) => void;
   /** What the box starts with (the search page's search). */
   initial?: string;
+  /** How what's added goes in (components/AddOptions.tsx), under the box. */
+  options?: React.ReactNode;
 };
 
 /** The ways in: a YouTube link or a search, and files. */
-export default function AddBar({ onLink, onSearch, onFiles, initial = "" }: Props) {
+export default function AddBar({ onLink, onSearch, onFiles, initial = "", options }: Props) {
   const [text, setText] = useState(initial);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -67,6 +69,7 @@ export default function AddBar({ onLink, onSearch, onFiles, initial = "" }: Prop
           />
         </>
       )}
+      {options}
     </section>
   );
 }

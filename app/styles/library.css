@@ -537,3 +537,51 @@ input.pick {
 .selection .confirm {
   margin-top: 0;
 }
+
+/* ─── Adding: as video or music, and into playlists (components/AddOptions.tsx) ─── */
+.add {
+  flex-wrap: wrap;
+}
+
+.add-options {
+  flex-basis: 100%;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.add-options .chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.add-into {
+  position: relative;
+  min-width: 0;
+}
+
+.add-into > .chip {
+  max-width: 100%;
+}
+
+.add-into-label {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.add-into .menu {
+  left: 0;
+  right: auto;
+}
+
+.watch-info .add-options,
+.preview-bar .add-options {
+  flex-basis: auto;
+}
+
+.watch-info .add-options {
+  margin-top: 10px;
+}

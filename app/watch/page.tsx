@@ -5,7 +5,7 @@ import WatchPreview from "@/components/WatchPreview";
 import { youtubeVideoId } from "@/lib/ids";
 import { listJobs } from "@/lib/jobs";
 import { getVideo } from "@/lib/library";
-import { findPlaylist } from "@/lib/playlists";
+import { findPlaylist, listPlaylists } from "@/lib/playlists";
 import { hasSession, requirePageSession } from "@/lib/session";
 import { isActive } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
@@ -58,5 +58,6 @@ export default async function Page({ searchParams }: Props) {
     redirect(playerHref(video.id, playlist?.id));
   }
   const job = listJobs().find((j) => j.youtubeId === ytId && isActive(j)) ?? null;
-  return <WatchPreview youtubeId={ytId} listId={listId} start={start} info={await info(ytId)} initialJob={job} />;
+  const [about, playlists] = await Promise.all([info(ytId), listPlaylists()]);
+  return <WatchPreview youtubeId={ytId} listId={listId} start={start} info={about} initialJob={job} initialPlaylists={playlists} />;
 }

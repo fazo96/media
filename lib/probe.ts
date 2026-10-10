@@ -229,7 +229,8 @@ export type AudioPlan = {
 /**
  * How to keep a music file (audio, no video): as it is when a browser plays
  * it and it has one track; otherwise the track wanted alone, copied into m4a
- * (webm for Vorbis) or converted to AAC. `ext` as for plan().
+ * (webm for Vorbis) or converted to AAC. A video added as music is never kept
+ * as it is. `ext` as for plan().
  */
 export function planAudio(p: Probe, ext: string, languages: string[] = []): AudioPlan {
   const audio = pickAudio(p.audio, languages);
@@ -239,7 +240,7 @@ export function planAudio(p: Probe, ext: string, languages: string[] = []): Audi
   const container = listenContainer(track.codec);
   return {
     audio,
-    asIs: same && p.audio.length === 1 ? { ext: same.keep, mime: same.mime } : null,
+    asIs: same && p.audio.length === 1 && !p.videoCodec ? { ext: same.keep, mime: same.mime } : null,
     container,
     convert: !AUDIO[container].has(track.codec),
   };

@@ -15,7 +15,7 @@ type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Pla
 /** The Transmission page: the imports under way (or failed), and the torrents to import from. */
 export default function Transmission({ initialVideos, initialJobs, initialPlaylists }: Props) {
   const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: initialPlaylists });
-  const { jobs, keepJobs } = lib;
+  const { jobs, keepJobs, playlists, keepPlaylist } = lib;
   const [error, setError] = useState<string | null>(null);
   const imports = jobs.filter((j) => j.torrent && j.state !== "done");
 
@@ -24,7 +24,7 @@ export default function Transmission({ initialVideos, initialJobs, initialPlayli
     if (!j.torrent) return;
     await lib.dismissJobs([j]);
     try {
-      keepJobs([(await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job]);
+      keepJobs([(await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist, j.torrent.playlists)).job]);
     } catch (err) {
       setError(errorMessage(err));
     }
@@ -49,7 +49,7 @@ export default function Transmission({ initialVideos, initialJobs, initialPlayli
             ))}
           </ul>
         )}
-        <TransmissionPanel jobs={jobs} onJob={(job) => keepJobs([job])} />
+        <TransmissionPanel jobs={jobs} onJob={(job) => keepJobs([job])} playlists={playlists} onPlaylistCreated={keepPlaylist} />
       </main>
     </div>
   );

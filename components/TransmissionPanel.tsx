@@ -5,8 +5,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { errorMessage, importTorrent, listTorrents } from "@/lib/api";
 import { formatSize } from "@/lib/format";
 import { local } from "@/lib/storage";
-import { isActive, type Job, type Torrent, type TorrentFile } from "@/lib/types";
+import { isActive, type Job, type Playlist, type Torrent, type TorrentFile } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
+import AddOptions, { useAddOptions } from "./AddOptions";
 import { IconPlay, IconRefresh, IconSearch, IconWarn } from "./icons";
 import { useNowPlaying } from "./NowPlaying";
 
@@ -46,15 +47,20 @@ type Props = {
   jobs: Job[];
   /** An import was queued: its job joins the page's. */
   onJob: (job: Job) => void;
+  /** The library's playlists, to import into. */
+  playlists: Playlist[];
+  onPlaylistCreated: (p: Playlist) => void;
 };
 
 /** Transmission's torrents with a video in them: import their finished files, then (by default) remove the torrent. */
-export default function TransmissionPanel({ jobs, onJob }: Props) {
+export default function TransmissionPanel({ jobs, onJob, playlists, onPlaylistCreated }: Props) {
   const [torrents, setTorrents] = useState<Torrent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
   const [remove, setRemove] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  // The playlists imports go into (Import all makes the torrent's own besides).
+  const into = useAddOptions();
   // An import that would delete videos not in the library, waiting for a yes.
   const [confirming, setConfirming] = useState<{ hash: string; files: TorrentFile[]; all: boolean; left: number } | null>(null);
   // The file playing under its row, before it's imported (one at a time).
@@ -107,6 +113,7 @@ export default function TransmissionPanel({ jobs, onJob }: Props) {
         files.map((f) => f.index),
         remove,
         all,
+        into.playlists,
       );
       onJob(job);
       setError(null);
@@ -136,6 +143,7 @@ export default function TransmissionPanel({ jobs, onJob }: Props) {
           <input type="checkbox" checked={remove} onChange={(e) => pickRemove(e.target.checked)} />
           Then delete the torrent and its files from Transmission
         </label>
+        <AddOptions choice={into} kind={false} playlists={playlists} onCreated={onPlaylistCreated} onError={setError} />
       </div>
       {error && <p className="notice is-error torrent-error">{error}</p>}
       {!torrents ? (

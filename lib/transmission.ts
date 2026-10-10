@@ -7,7 +7,7 @@ import { pipeline } from "node:stream/promises";
 import { HttpError } from "./errors";
 import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, incomingDir, listVideos } from "./library";
-import { appendOrCreate, updatePlaylist } from "./playlists";
+import { addToPlaylists, appendOrCreate, updatePlaylist } from "./playlists";
 import { byName } from "./sort";
 import { isActive, type Job, type Torrent, type TorrentFile, type TorrentJob, type Video } from "./types";
 
@@ -220,8 +220,9 @@ const add = queue("torrent", runImport);
  * then remove the torrent and its data from Transmission, once all of them are
  * in. `playlist`: put them (and the torrent's videos in the library already)
  * in a playlist named after the torrent, the one made before if there is one.
+ * `playlists` (ids): each one goes at the end of those too.
  */
-export async function importTorrent(hash: string, indexes: number[], remove: boolean, playlist = false): Promise<Job> {
+export async function importTorrent(hash: string, indexes: number[], remove: boolean, playlist = false, playlists: string[] = []): Promise<Job> {
   if (listJobs().some((j) => j.torrent?.hash === hash && isActive(j))) throw new ImportError(409, "That torrent is being imported already.");
   const t = await getTorrent(hash);
   if (!t) throw new ImportError(404, "That torrent isn’t in Transmission any more.");
@@ -234,7 +235,7 @@ export async function importTorrent(hash: string, indexes: number[], remove: boo
   return add({
     id: newJobId(),
     kind: "torrent",
-    torrent: { hash, files, remove, playlist, current: 0 },
+    torrent: { hash, files, remove, playlist, ...(playlists.length ? { playlists } : {}), current: 0 },
     title: t.name,
     state: "queued",
     progress: null,
@@ -281,7 +282,12 @@ async function runImport(job: TorrentJob, signal: AbortSignal) {
   // A file imported before (by a try that failed on a later one) counts as in.
   const inLibrary = (name: string) => videos.find((v) => v.torrentHash === imp.hash && v.originalName === name);
   // Import all's playlist: made (or found) first, so a failure halfway leaves what got in.
-  const addToPlaylist = imp.playlist ? await torrentPlaylist(job, t, videos) : async () => {};
+  const toTorrentPlaylist = imp.playlist ? await torrentPlaylist(job, t, videos) : async () => {};
+  // And the playlists it was asked into.
+  const addToPlaylist = async (id: string) => {
+    await toTorrentPlaylist(id);
+    await addToPlaylists(imp.playlists ?? [], [id]);
+  };
   const total = imp.files.reduce((sum, i) => sum + (t.files[i] && !inLibrary(t.files[i].name) ? t.files[i].length : 0), 0);
   let copied = 0;
   const started = Date.now();

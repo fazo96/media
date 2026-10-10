@@ -2,7 +2,7 @@
 
 `lib/jobs.ts` keeps the jobs in memory (on `globalThis`, so `next dev`'s reloads share them), and gives each kind a queue (`queue(kind, run)`) that runs one at a time: `run` returning is done, throwing is failed, and dismissing a job aborts the `signal` it was given. `lib/downloads.ts` is YouTube's, one yt-dlp at a time. Jobs (`Job` in `lib/types.ts`, a `YoutubeJob` or a `TorrentJob`) go queued → downloading → processing → done or failed, and stay listed until dismissed (`DELETE /api/jobs/<jid>`, which also cancels a running one) or the server restarts. A restart loses the queue; `.incoming/` is emptied at startup. Imports from Transmission are jobs in the same list (`kind: "torrent"`), run by a queue of their own ([transmission](transmission.md#an-import)).
 
-`POST /api/jobs { url }` accepts any link `parseYoutube()` (`lib/youtube.ts`) understands (watch, youtu.be, shorts, embed, live, music, a bare 11-character id). If the video is in the library already it answers `{ video }` and downloads nothing, unless `replace: true` ("Download again"). Asking for a video that's already queued answers its job. A watch link inside a playlist (`&list=`) downloads just the video; the page offers the playlist beside it.
+`POST /api/jobs { url }` accepts any link `parseYoutube()` (`lib/youtube.ts`) understands (watch, youtu.be, shorts, embed, live, music, a bare 11-character id). If the video is in the library already it answers `{ video }` and downloads nothing, unless `replace: true` ("Download again"). Asking for a video that's already queued answers its job. `music: true` downloads it [as music](#as-music); `playlists` (ids) puts its id at the end of those [playlists](library.md#playlists) at once, before it downloads (or when it's in the library already), and the answer carries the ones changed (`playlists`). A watch link inside a playlist (`&list=`) downloads just the video; the page offers the playlist beside it.
 
 ## yt-dlp's arguments
 
@@ -12,6 +12,10 @@
 - `--newline --progress-template` prints `media-progress <done> <total> <estimate> <speed> <eta>` lines, read by `parseProgress()`. Video and audio come down one after the other; when progress jumps back, `stream` goes up (the page says "audio").
 
 The result goes through `addVideo()` like a dropped file ([library](library.md#adding-a-video)), under the id `youtubeVideoId()`, with the job's abort signal (dismissing it while processing stops ffmpeg too) and `onConvert` (the card says "Converting audio"). A failure keeps yt-dlp's last `ERROR:` line as the job's error (`lastError()` in `lib/tools.ts`).
+
+## As music
+
+A job with `music: true` (`downloadArgs()`) asks for the audio alone, `-f ba[ext=m4a]/ba/b` (`MUSIC_FORMAT`: AAC in m4a, which every browser plays and is kept as it is; then any audio, Opus in webm say; then a whole video), without merging into mp4. It goes through `addVideo()` with `music` ([library](library.md#added-as-music)), keeping YouTube's still, and is named by its info.json's `track` and `artist` when YouTube Music has them (else its title and channel). A retry keeps the job's `music`.
 
 ## Searching
 
@@ -26,4 +30,4 @@ A result is added with the same `POST /api/jobs`, and the thumbnails come straig
 
 `parsePlaylist()` (`lib/youtube.ts`) finds the `list=` in a YouTube link, or takes a bare `PL…`, `OLAK5uy_…` or `UU…` id. `inspectPlaylist()` reads a whole one with `yt-dlp --flat-playlist --dump-single-json -- <playlist link>` (about 5 seconds for a hundred videos): `parsePlaylistInfo()` keeps the videos that have a length, as search does, and counts the rest (private, deleted, live) as `unavailable`.
 
-`downloadPlaylist()` is "Download all": it reads the playlist again, makes a [playlist](library.md#playlists) of its videos' ids (or, for one downloaded before, found by `youtubePlaylistId`, appends the new ones: `appendOrCreate()` in `lib/playlists.ts`), and queues every video not in the library yet, in order, each job carrying the playlist's id (`playlistId`, so the page can group them). There is no syncing afterwards: downloading it again is how new videos come in.
+`downloadPlaylist()` is "Download all": it reads the playlist again, makes a [playlist](library.md#playlists) of its videos' ids (or, for one downloaded before, found by `youtubePlaylistId`, appends the new ones: `appendOrCreate()` in `lib/playlists.ts`), and queues every video not in the library yet, in order, each job carrying the playlist's id (`playlistId`, so the page can group them). `music: true` downloads them all as music (an album, say), and `playlists` puts its videos' ids at the end of those playlists too. There is no syncing afterwards: downloading it again is how new videos come in.

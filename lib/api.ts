@@ -3,7 +3,7 @@
 // throws an ApiError carrying the server's own message ({ error } in the body).
 // Uploads (with progress) and beacons use XHR and sendBeacon directly.
 
-import type { Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, ShareTarget, Torrent, Video, YoutubePlaylist } from "./types";
+import type { AddOptions, Job, Playlist, SearchResults, Share, SharedLink, ShareExpiry, ShareTarget, Torrent, Video, YoutubePlaylist } from "./types";
 import { playlistUrl } from "./youtube";
 
 export class ApiError extends Error {
@@ -43,13 +43,15 @@ export async function apiDelete(path: string): Promise<void> {
   }
 }
 
-/** Send a file to the library, reporting the share sent (0–1) as it goes. */
-export function uploadVideo(file: File, onProgress: (sent: number) => void, signal?: AbortSignal): Promise<Video> {
+/** Send a file to the library (as music, into playlists), reporting the share sent (0–1) as it goes. */
+export function uploadVideo(file: File, onProgress: (sent: number) => void, { music, playlists }: AddOptions = {}, signal?: AbortSignal): Promise<Video> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", "/api/upload");
     xhr.setRequestHeader("X-Filename", encodeURIComponent(file.name));
     xhr.setRequestHeader("Content-Type", "application/octet-stream");
+    if (music) xhr.setRequestHeader("X-Music", "1");
+    if (playlists?.length) xhr.setRequestHeader("X-Playlists", playlists.join(","));
     xhr.upload.onprogress = (e) => e.lengthComputable && onProgress(e.loaded / e.total);
     xhr.onload = () => {
       let data: { error?: string } | Video | null = null;
@@ -66,9 +68,13 @@ export function uploadVideo(file: File, onProgress: (sent: number) => void, sign
   });
 }
 
-/** Ask for a YouTube video: either it's in the library already, or a download starts. */
-export const requestYoutube = (url: string, replace = false) =>
-  api<{ video?: Video; job?: Job }>("/api/jobs", { method: "POST", json: { url, replace } });
+/**
+ * Ask for a YouTube video: either it's in the library already, or a download
+ * starts (`replace`: again, over the one there). It goes into `playlists` at
+ * once; the answer has the ones changed.
+ */
+export const requestYoutube = (url: string, { replace = false, music, playlists }: AddOptions & { replace?: boolean } = {}) =>
+  api<{ video?: Video; job?: Job; playlists: Playlist[] }>("/api/jobs", { method: "POST", json: { url, replace, music, playlists } });
 
 /** Search YouTube: what it finds (each one can then go to requestYoutube). */
 export const searchYoutube = (query: string, signal?: AbortSignal) =>
@@ -78,9 +84,9 @@ export const searchYoutube = (query: string, signal?: AbortSignal) =>
 export const inspectPlaylist = (list: string, signal?: AbortSignal) =>
   api<YoutubePlaylist>(`/api/youtube/playlist?list=${encodeURIComponent(playlistUrl(list))}`, { signal });
 
-/** Download a whole YouTube playlist into a playlist in the library. */
-export const downloadPlaylist = (list: string) =>
-  api<{ playlist: Playlist; jobs: Job[] }>("/api/playlists", { method: "POST", json: { youtube: playlistUrl(list) } });
+/** Download a whole YouTube playlist into a playlist in the library (and into `playlists`, the other ones changed). */
+export const downloadPlaylist = (list: string, { music, playlists }: AddOptions = {}) =>
+  api<{ playlist: Playlist; jobs: Job[]; playlists: Playlist[] }>("/api/playlists", { method: "POST", json: { youtube: playlistUrl(list), music, playlists } });
 
 /** A new, empty playlist. */
 export const createPlaylist = async (title: string) =>
@@ -120,9 +126,9 @@ export const shareUrl = (s: Share) => `${location.origin}/s/${s.token}`;
 /** Transmission's torrents with a video in them (404 when it isn't set up, 502 when it can't be reached). */
 export const listTorrents = () => api<{ torrents: Torrent[] }>("/api/transmission");
 
-/** Import a torrent's finished videos (`files`: indexes), then maybe remove it from Transmission. */
-export const importTorrent = (hash: string, files: number[], remove: boolean, playlist = false) =>
-  api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove, playlist } });
+/** Import a torrent's finished videos (`files`: indexes), into `playlists`, then maybe remove it from Transmission. */
+export const importTorrent = (hash: string, files: number[], remove: boolean, playlist = false, playlists: string[] = []) =>
+  api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove, playlist, playlists } });
 
 /** Every video in the library. */
 export const listVideos = () => api<Video[]>("/api/videos");

@@ -5,6 +5,7 @@ import path from "node:path";
 import { test } from "node:test";
 import { addVideo, audioFile, getVideo, incomingDir, listVideos, NotAVideo, trashVideo, updateVideo, videoFile, withListen } from "../lib/library.ts";
 import { TRASH_DIR } from "../lib/paths.ts";
+import { isAudio } from "../lib/types.ts";
 import { FIXTURE, hasFfmpeg } from "./helpers.ts";
 
 async function incoming(name: string, from = FIXTURE) {
@@ -221,4 +222,35 @@ test("music browsers can't play is converted to AAC", { skip: !hasFfmpeg }, asyn
   assert.equal(v.file, "track.m4a");
   assert.equal(v.audioCodec, "aac");
   assert.deepEqual(streams(videoFile(v)), [["audio", "aac", "und"]]);
+});
+
+test("a video added as music keeps its audio alone, with a frame of it for a still", { skip: !hasFfmpeg }, async () => {
+  const v = await addVideo(await incoming("upload.mp4"), { title: "Music Video", source: "file", originalName: "Music Video.mp4" }, { music: true });
+  assert.equal(v.id, "music-video");
+  assert.equal(v.file, "track.m4a");
+  assert.equal(v.mime, "audio/mp4");
+  assert.equal(v.videoCodec, undefined);
+  assert.equal(v.width, undefined);
+  assert.equal(v.listen, true);
+  assert.equal(v.hasThumb, true);
+  assert.ok(isAudio(v));
+  // What's kept is the track alone: ffprobe finds no video in it.
+  const streams = execFileSync("ffprobe", ["-v", "error", "-show_entries", "stream=codec_type", "-of", "csv=p=0", videoFile(v)], { encoding: "utf8" });
+  assert.deepEqual(streams.trim().split("\n"), ["audio"]);
+  assert.ok((await readdir(path.dirname(videoFile(v)))).includes("thumb.jpg"));
+});
+
+test("downloaded again as a video, music starts without listen mode", { skip: !hasFfmpeg }, async () => {
+  const details = { title: "Both Ways", source: "youtube" as const, youtubeId: "bothways000", originalName: "video.mp4" };
+  const music = await addVideo(await incoming("video.mp4"), details, { id: "yt-bothways000-0", music: true });
+  assert.equal(music.listen, true);
+  const video = await addVideo(await incoming("video.mp4"), details, { id: "yt-bothways000-0" });
+  assert.equal(video.videoCodec, "h264");
+  assert.equal(video.listen, undefined);
+});
+
+test("a video without audio can't be added as music", { skip: !hasFfmpeg }, async () => {
+  const silent = path.join(await incomingDir(), "silent.mp4");
+  execFileSync("ffmpeg", ["-v", "error", "-i", FIXTURE, "-an", "-c", "copy", silent]);
+  await assert.rejects(addVideo(silent, { title: "Silent Song", source: "file", originalName: "silent.mp4" }, { music: true }), NotAVideo);
 });

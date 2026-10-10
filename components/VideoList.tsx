@@ -16,7 +16,8 @@ type RowProps = {
   video: Video;
   onRemoved: (id: string) => void;
   onChanged: (v: Video) => void;
-  onRedownload: () => void;
+  /** Download a YouTube one again: as music, or as a video. */
+  onRedownload: (music: boolean) => void;
   playlists: Playlist[];
   onPlaylistChanged: (p: Playlist) => void;
   pick: Pick;
@@ -24,7 +25,7 @@ type RowProps = {
 
 type Props = Omit<RowProps, "video" | "onRedownload" | "pick"> & {
   videos: Video[];
-  onRedownload: (v: Video) => void;
+  onRedownload: (v: Video, music: boolean) => void;
   picked: ReadonlySet<string>;
   onPick: (id: string, range: boolean) => void;
   /** The box over the boxes: true picks every one shown, false none. */
@@ -68,7 +69,7 @@ export default function VideoList({ videos, picked, onPick, onPickAll, onRedownl
           <VideoRow
             key={v.id}
             video={v}
-            onRedownload={() => onRedownload(v)}
+            onRedownload={(music) => onRedownload(v, music)}
             pick={{ on: picked.has(v.id), toggle: (range) => onPick(v.id, range) }}
             {...rest}
           />

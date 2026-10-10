@@ -7,7 +7,7 @@ import { getJob } from "../lib/jobs.ts";
 import { isActive } from "../lib/types.ts";
 import { getVideo } from "../lib/library.ts";
 import { INCOMING_DIR, MEDIA_DIR } from "../lib/paths.ts";
-import { getPlaylist } from "../lib/playlists.ts";
+import { createPlaylist, getPlaylist } from "../lib/playlists.ts";
 import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, playlistTitleOf, previewFile, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
 import type { Job, Video } from "../lib/types.ts";
 import { hasFfmpeg } from "./helpers.ts";
@@ -181,11 +181,13 @@ test("a failed import leaves the torrent alone", { skip: !hasFfmpeg }, async () 
   assert.deepEqual((await rpc("stub-removed")).removed, []);
 });
 
-test("an import removes the torrent when asked", { skip: !hasFfmpeg }, async () => {
+test("an import removes the torrent when asked, and goes into the playlists asked", { skip: !hasFfmpeg }, async () => {
   await rpc("stub-reset");
-  const job = await finish(await importTorrent(A, [0], true));
+  const movies = await createPlaylist({ title: "Movies" });
+  const job = await finish(await importTorrent(A, [0], true, false, [movies.id, "gone-meanwhile"]));
   assert.equal(job.state, "done", job.error ?? "");
   assert.equal((await getVideo(job.videoId as string))?.title, "Stub Movie 2020 1080p");
+  assert.deepEqual((await getPlaylist(movies.id))?.items, [job.videoId]);
   assert.deepEqual((await rpc("stub-removed")).removed, [{ hash: A, deleteLocalData: true }]);
   assert.equal((await listTorrents()).find((t) => t.hash === A), undefined);
 });

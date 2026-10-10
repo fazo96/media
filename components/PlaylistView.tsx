@@ -2,39 +2,71 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { changePlaylist, deletePlaylist, errorMessage, requestYoutube } from "@/lib/api";
 import { playlistCount, sourceLabel } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
-import { inLibrary, isActive, isAudio, type Job, type Playlist, type Video } from "@/lib/types";
+import { type AddOptions as Options, inLibrary, isActive, isAudio, type Job, type Playlist, type Video } from "@/lib/types";
 import { playerHref, thumbUrl } from "@/lib/urls";
 import { youtubeUrl } from "@/lib/youtube";
-import { IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash } from "./icons";
+import AddBar from "./AddBar";
+import AddOptions, { useAddOptions } from "./AddOptions";
+import { IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash, IconUpload } from "./icons";
 import { Confirm, Rename } from "./InlineEdit";
+import { UploadCard } from "./JobCard";
 import MediaRow, { Still } from "./MediaRow";
 import Notice from "./Notice";
 import ShareButton from "./ShareLinks";
 import Topbar, { toPlaylists } from "./Topbar";
 import { useLibrary } from "./useLibrary";
+import { useDropAndPaste, useUploads } from "./useUploads";
+import { type News, useYoutube } from "./useYoutube";
 import YtThumb from "./YtThumb";
 
-type Props = { initialPlaylist: Playlist; initialVideos: Video[]; initialJobs: Job[] };
+type Props = { initialPlaylist: Playlist; initialPlaylists: Playlist[]; initialVideos: Video[]; initialJobs: Job[] };
 
-/** A playlist: its videos in order, played through from the top; renamed, trimmed or deleted here. */
-export default function PlaylistView({ initialPlaylist, initialVideos, initialJobs }: Props) {
+/**
+ * A playlist: its videos in order, played through from the top; renamed,
+ * trimmed or deleted here. What's dropped, pasted or downloaded here goes into
+ * it (and any other playlists picked).
+ */
+export default function PlaylistView({ initialPlaylist, initialPlaylists, initialVideos, initialJobs }: Props) {
   const router = useRouter();
-  const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: [initialPlaylist] });
-  const { videos, jobs, keepPlaylist } = lib;
+  const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: initialPlaylists });
+  const { videos, jobs, keepPlaylist, keepJobs, keepVideo, refresh } = lib;
   // As the library has it now; gone meanwhile (once it's been asked), to the library.
   const found = lib.playlists.find((x) => x.id === initialPlaylist.id);
   const p = found ?? initialPlaylist;
   const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
-  const [error, setError] = useState<string | null>(null);
-  const fail = (err: unknown) => setError(errorMessage(err));
+  const [notice, setNotice] = useState<News | null>(null);
+  const fail = (err: unknown) => setNotice({ text: errorMessage(err), error: true });
+  const say = useCallback((text: string) => setNotice({ text, error: true }), []);
 
   useEffect(() => {
     if (lib.synced && !found) router.replace("/");
   }, [lib.synced, found, router]);
+
+  // Adding from here: into this playlist to start with.
+  const add = useAddOptions([initialPlaylist.id]);
+  const yt = useYoutube({ keepJobs, keepPlaylist, say: setNotice, options: add.options, into: initialPlaylist.id });
+  const { addLink } = yt;
+  const onUploaded = useCallback(
+    (v: Video, o: Options) => {
+      keepVideo(v);
+      if (o.playlists?.length) void refresh();
+    },
+    [keepVideo, refresh],
+  );
+  const up = useUploads({ onAdded: onUploaded, onRefused: say, options: add.options });
+  const { addFiles } = up;
+  const onFiles = useCallback(
+    (files: File[]) => {
+      if (addFiles(files)) setNotice(null);
+    },
+    [addFiles],
+  );
+  const onLink = useCallback((text: string) => void addLink(text), [addLink]);
+  const dragging = useDropAndPaste({ onFiles, onLink });
 
   const byId = new Map(videos.map((v) => [v.id, v]));
   const present = inLibrary(p.items, byId);
@@ -58,11 +90,12 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
     }
   };
 
-  const download = async (ytId: string) => {
+  // A failed one tries again as what it was asked as (it's in the playlist already).
+  const download = async (ytId: string, music?: boolean) => {
     try {
-      const res = await requestYoutube(ytId);
-      if (res.job) lib.keepJobs([res.job]);
-      if (res.video) lib.keepVideo(res.video);
+      const res = await requestYoutube(ytId, { music });
+      if (res.job) keepJobs([res.job]);
+      if (res.video) keepVideo(res.video);
     } catch (err) {
       fail(err);
     }
@@ -142,15 +175,38 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
               </button>
             )}
           </div>
-          {error && (
-            <Notice error onDismiss={() => setError(null)}>
-              {error}
-            </Notice>
-          )}
         </section>
 
+        <AddBar
+          onLink={addLink}
+          onSearch={yt.runSearch}
+          onFiles={onFiles}
+          options={<AddOptions choice={add} playlists={lib.playlists} onCreated={keepPlaylist} onError={say} />}
+        />
+
+        {notice && (
+          <Notice error={notice.error} onDismiss={() => setNotice(null)}>
+            {notice.text}
+            {notice.action && (
+              <button type="button" className="link-btn" onClick={notice.action.run}>
+                {notice.action.label}
+              </button>
+            )}
+          </Notice>
+        )}
+
+        {up.uploads.length > 0 && (
+          <ul className="grid grid-coming">
+            {up.uploads.map((u) => (
+              <li key={u.key}>
+                <UploadCard upload={u} onDismiss={() => up.dismiss(u.key)} />
+              </li>
+            ))}
+          </ul>
+        )}
+
         {p.items.length === 0 ? (
-          <p className="none">Nothing here yet. Add videos from their ⋯ menu in the library.</p>
+          <p className="none">Nothing here yet. Drop files on this page, paste a YouTube link, or add videos from their ⋯ menu in the library.</p>
         ) : (
           <ol className="pl-items">
             {p.items.map((id, i) => {
@@ -181,7 +237,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                   />
                   <span className="pl-item-actions">
                     {!v && ytId && (!job || job.state === "failed") && (
-                      <button type="button" className="icon-btn" onClick={() => download(ytId)} aria-label="Download it" title="Download it">
+                      <button type="button" className="icon-btn" onClick={() => download(ytId, job?.music)} aria-label="Download it" title="Download it">
                         <IconRefresh />
                       </button>
                     )}
@@ -200,6 +256,17 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
           </ol>
         )}
       </main>
+
+      {dragging && (
+        <div className="drop-target" aria-hidden="true">
+          <div className="drop-card">
+            <IconUpload />
+            <span>
+              Drop to add to “{p.title}”{add.music ? " as music" : ""}
+            </span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

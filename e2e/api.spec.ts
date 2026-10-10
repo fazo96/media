@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { MUSIC, unique, upload } from "./helpers";
+import { FIXTURE, MUSIC, unique, upload } from "./helpers";
 
 // Every route's answers, without a browser.
 
@@ -227,4 +227,48 @@ test("music: kept as it is, always in listen mode, and its own listen mode file;
   expect(cast.headers()["content-type"]).toBe("audio/mp4");
   expect(cast.headers()["access-control-allow-origin"]).toBe("*");
   expect((await request.get(`/api/s/${"0".repeat(32)}/audio`)).status()).toBe(404);
+});
+
+test("adding as music and into playlists: a download, an upload, a whole YouTube playlist", async ({ request }) => {
+  const { playlist } = await (await request.post("/api/playlists", { data: { title: unique("Into") } })).json();
+  const bad = await request.post("/api/jobs", { data: { url: "apiMusic001", playlists: ["../x"] } });
+  expect(bad.status()).toBe(400);
+
+  // A download is in the playlists straight away.
+  const res = await request.post("/api/jobs", { data: { url: "apiMusic001", music: true, playlists: [playlist.id, "gone-meanwhile"] } });
+  expect(res.status()).toBe(202);
+  const { job, playlists } = await res.json();
+  expect(job.music).toBe(true);
+  expect(playlists.map((p: { id: string }) => p.id)).toEqual([playlist.id]);
+  expect(playlists[0].items).toEqual([expect.stringMatching(/^yt-apimusic001-/)]);
+  await expect
+    .poll(async () => ((await (await request.get("/api/jobs")).json()) as { id: string; state: string }[]).find((j) => j.id === job.id)?.state, { timeout: 30_000 })
+    .toBe("done");
+  const song = await (await request.get(`/api/videos/${playlists[0].items[0]}`)).json();
+  expect(song.file).toBe("track.m4a");
+  expect(song.mime).toBe("audio/mp4");
+  expect(song.videoCodec).toBeUndefined();
+  expect(song.listen).toBe(true);
+
+  // An upload, as music, into the playlist.
+  const fs = await import("node:fs");
+  const up = await request.post("/api/upload", {
+    headers: { "X-Filename": encodeURIComponent(`${unique("Upload Song")}.mp4`), "Content-Type": "application/octet-stream", "X-Music": "1", "X-Playlists": playlist.id },
+    data: fs.readFileSync(FIXTURE),
+  });
+  expect(up.status()).toBe(201);
+  const uploaded = await up.json();
+  expect(uploaded.file).toBe("track.m4a");
+  // One already in the library goes into the playlists too.
+  const again = await (await request.post("/api/jobs", { data: { url: "apiMusic001", playlists: [playlist.id] } })).json();
+  expect(again.video.id).toBe(song.id);
+  const now = await (await request.get(`/api/playlists/${playlist.id}`)).json();
+  expect(now.items).toEqual([song.id, uploaded.id]);
+
+  // A whole YouTube playlist, as music, into it as well.
+  const list = `PL${unique("music").replace(/\W/g, "")}`;
+  const whole = await (await request.post("/api/playlists", { data: { youtube: list, music: true, playlists: [playlist.id] } })).json();
+  expect(whole.jobs.every((j: { music?: boolean }) => j.music)).toBe(true);
+  expect(whole.playlists[0].items.slice(2)).toEqual(whole.playlist.items);
+  for (const j of whole.jobs) await request.delete(`/api/jobs/${j.id}`);
 });

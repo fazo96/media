@@ -48,11 +48,15 @@ A file with audio and no video (an mp3, an album's flac) is music. It goes throu
 - Its tags name it: `title` (any case: a flac's are in capitals, an ogg's are its track's) replaces the file's name, so the id is a slug of that, and `artist` is its `channel`.
 - It's always in [listen mode](#listen-mode): `listen: true` from the start, and `withListen()` leaves it on whatever it's asked (so a playlist's Listen turning off leaves its music be). `audioFile()` is the file itself; nothing is made beside it.
 
-In [Browse](#browse) it's with the videos, under its own extension (`<Title>.mp3`). Transmission imports and YouTube downloads are videos only.
+In [Browse](#browse) it's with the videos, under its own extension (`<Title>.mp3`).
+
+### Added as music
+
+A video can be added as music instead (`addVideo(…, { music: true })`): a YouTube download asked for as music ([downloads](downloads.md#as-music)), or a file uploaded with `X-Music: 1` ([api](api.md)). It's music from then on, as above, but `planAudio()` never keeps a file with video in it as it is, so its track always comes out alone (`track.m4a`, copied in seconds, or converted). Its still is the one that came with it (YouTube's), else a frame of the video, taken from the incoming file as `thumbnail()` takes a video's. One with no audio is a `NotAVideo` (415). A YouTube video's id is the same either way, so it's one or the other in the library; "Download again as music" (or "as video") swaps it, and a video made from music starts without listen mode. Transmission imports are videos only.
 
 ## Listen mode
 
-Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api/videos/<id> { listen }`, or a playlist's `{ listen }`, which sets it on every video in it then; a playlist keeps no setting of its own) has the player play its audio alone, which a phone keeps playing with the screen off: Chrome on Android pauses a background `<video>` with a picture, never one without ([pages](pages.md#listen-mode)). Off leaves no field behind (`withListen()`). A forced re-download keeps it, as it keeps the watching.
+Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api/videos/<id> { listen }`, or a playlist's `{ listen }`, which sets it on every video in it then; a playlist keeps no setting of its own) has the player play its audio alone, which a phone keeps playing with the screen off: Chrome on Android pauses a background `<video>` with a picture, never one without ([pages](pages.md#listen-mode)). Off leaves no field behind (`withListen()`). A forced re-download keeps it, as it keeps the watching (unless what it replaces was music).
 
 `audioFile()` (`lib/library.ts`, served by `GET /api/videos/<id>/audio`) makes the file the first time it's asked for, beside the video, and keeps it (remade when the video file is newer): the track the video plays (in a playable file, the default one, which [adding](#adding-a-video) made the language wanted; otherwise `pickAudio()`'s), copied (`extractAudio()` in `lib/ffmpeg.ts`, seconds) into mp4 as `audio.m4a`, or webm as `audio.webm` for Vorbis, or converted to AAC when a browser can't play it (AC-3, DTS…; about a minute for a film). Two requests at once wait for the same ffmpeg; it writes to a temporary name and renames. A video without audio has none (404); [music](#music) is its own file. The file goes to the trash with its folder, and isn't counted in the [disk usage](#disk-usage)'s `library` (that sums the videos' `size`).
 
@@ -60,7 +64,7 @@ Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api
 
 `lib/playlists.ts`. A playlist is a JSON file listing video ids in order; a video can be in any number of them. Its id is a slug of its title, claimed like a dropped file's (`freeName` and `createExclusive`: then `-2`, `-3`…); renaming keeps it. `updatePlaylist()` serializes changes to one file (`serially` in `lib/files.ts`, which `updateVideo()` uses too) and keeps one of each id.
 
-A torrent's Import all makes one too, marked with its `torrentHash` ([transmission](transmission.md#an-import)). Items aren't checked against the library: a whole YouTube playlist's ids are known before its videos download (see [downloads](downloads.md#playlists)), and deleting a video leaves its id behind. The pages show those as "not downloaded" (a YouTube one, with a retry) or "deleted", and skip them when playing. Deleting a playlist moves its file to the trash; its videos stay.
+A torrent's Import all makes one too, marked with its `torrentHash` ([transmission](transmission.md#an-import)). Whatever is added (a download, an upload, an import, a whole YouTube playlist) can also go straight into playlists picked as it's added (`playlists`, or `X-Playlists` for an upload): `addToPlaylists()` puts it at the end of each, skipping any deleted since. A YouTube video goes in when it's asked for, since its id is known before it downloads; an upload or an import once it's in. Items aren't checked against the library: a whole YouTube playlist's ids are known before its videos download (see [downloads](downloads.md#playlists)), and deleting a video leaves its id behind. The pages show those as "not downloaded" (a YouTube one, with a retry) or "deleted", and skip them when playing. Deleting a playlist moves its file to the trash; its videos stay.
 
 ## Browse
 

@@ -64,6 +64,23 @@ export function updatePlaylist(id: string, change: (p: Playlist) => Playlist): P
   });
 }
 
+/**
+ * Put `videoIds` at the end of each of the playlists `ids` names (the ones a
+ * video was added into), skipping any that's gone. Answers the ones changed.
+ */
+export async function addToPlaylists(ids: string[], videoIds: string[]): Promise<Playlist[]> {
+  const changed: Playlist[] = [];
+  for (const id of new Set(ids)) {
+    const p = await updatePlaylist(id, (p) => ({ ...p, items: [...p.items, ...videoIds] }));
+    if (p) changed.push(p);
+  }
+  return changed;
+}
+
+/** Playlist ids from a request (`playlists`): an array of valid ids (none when absent); null when it's anything else. */
+export const playlistIds = (x: unknown): string[] | null =>
+  x === undefined ? [] : Array.isArray(x) && x.length <= 1000 && x.every(isValidId) ? x : null;
+
 /** Move a playlist to the trash; its videos stay. False when it's gone already. */
 export async function trashPlaylist(id: string): Promise<boolean> {
   await mkdir(TRASH_DIR, { recursive: true });

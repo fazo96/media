@@ -4,10 +4,11 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { dismissJob, errorMessage, listJobs, requestYoutube } from "@/lib/api";
 import { youtubeVideoId } from "@/lib/ids";
-import { isActive, type Job, type VideoInfo } from "@/lib/types";
+import { isActive, type Job, type Playlist, type VideoInfo } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
 import { youtubeUrl } from "@/lib/youtube";
-import { IconExternal, IconPlaylist, IconPlus, IconRefresh, IconWarn } from "./icons";
+import AddOptions, { useAddOptions } from "./AddOptions";
+import { IconExternal, IconHeadphones, IconPlaylist, IconPlus, IconRefresh, IconWarn } from "./icons";
 import { jobStatus, Progress } from "./JobCard";
 import Notice from "./Notice";
 import { useNowPlaying } from "./NowPlaying";
@@ -27,6 +28,8 @@ type Props = {
   info: VideoInfo | null;
   /** Its download, when one is under way already. */
   initialJob: Job | null;
+  /** The library's playlists, to add it into. */
+  initialPlaylists: Playlist[];
 };
 
 /**
@@ -34,7 +37,7 @@ type Props = {
  * player to preview it, and Add to the library, which follows its download
  * here until the library has it.
  */
-export default function WatchPreview({ youtubeId, listId, start, info, initialJob }: Props) {
+export default function WatchPreview({ youtubeId, listId, start, info, initialJob, initialPlaylists }: Props) {
   const now = useNowPlaying();
   const pause = useRef(now.pause);
   pause.current = now.pause;
@@ -42,6 +45,8 @@ export default function WatchPreview({ youtubeId, listId, start, info, initialJo
   const [job, setJob] = useState<Job | null>(initialJob);
   const [added, setAdded] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [playlists, setPlaylists] = useState(initialPlaylists);
+  const into = useAddOptions();
   const embeddable = info?.embeddable !== false;
   const title = info?.title ?? "A YouTube video";
 
@@ -80,11 +85,12 @@ export default function WatchPreview({ youtubeId, listId, start, info, initialJo
     };
   }, [following, youtubeId]);
 
-  const add = async () => {
+  // As music or a video, into the playlists picked; a failed one tries again as it was asked.
+  const add = async (music = false) => {
     setError(null);
     try {
       if (job) await dismissJob(job.id).catch(() => {}); // a failed one, tried again
-      const res = await requestYoutube(youtubeId);
+      const res = await requestYoutube(youtubeId, { music, playlists: into.playlists });
       if (res.video) setAdded(res.video.id);
       setJob(res.job ?? null);
     } catch (err) {
@@ -144,9 +150,20 @@ export default function WatchPreview({ youtubeId, listId, start, info, initialJo
                   <Progress value={job.state === "downloading" ? job.progress : null} />
                 </div>
               ) : (
-                <button type="button" className="btn btn-primary btn-small" onClick={() => void add()}>
-                  {failed ? <IconRefresh /> : <IconPlus />} {failed ? "Try again" : "Add to the library"}
-                </button>
+                failed ? (
+                  <button type="button" className="btn btn-primary btn-small" onClick={() => void add(job.music)}>
+                    <IconRefresh /> Try again
+                  </button>
+                ) : (
+                  <>
+                    <button type="button" className="btn btn-primary btn-small" onClick={() => void add()}>
+                      <IconPlus /> Add to the library
+                    </button>
+                    <button type="button" className="btn btn-small" onClick={() => void add(true)} title="Keep the audio alone: it plays on with the screen off">
+                      <IconHeadphones /> Add as music
+                    </button>
+                  </>
+                )
               )}
               {listId && (
                 <Link href={searchHref({ list: listId })} className="btn btn-small">
@@ -154,6 +171,15 @@ export default function WatchPreview({ youtubeId, listId, start, info, initialJo
                 </Link>
               )}
             </div>
+            {!added && !(job && !failed) && (
+              <AddOptions
+                choice={into}
+                kind={false}
+                playlists={playlists}
+                onCreated={(p) => setPlaylists((prev) => [p, ...prev])}
+                onError={setError}
+              />
+            )}
             {(error || failed) && (
               <Notice error>
                 <IconWarn />
