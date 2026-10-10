@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSelector, parseProgress, parseSearch } from "../lib/downloads.ts";
+import { formatSelector, parsePlaylistInfo, parsePlaylistSearch, parseProgress, parseSearch } from "../lib/downloads.ts";
 import { lastError } from "../lib/tools.ts";
 
 test("parseProgress reads the template's lines", () => {
@@ -39,4 +39,49 @@ test("parseSearch keeps the videos it can download", () => {
     { youtubeId: "n61ULEU7CO0", title: "Best of lofi", channel: "Lofi Girl", duration: 22258, views: 57986300 },
     { youtubeId: "_jH2oTNRe7g", title: "_jH2oTNRe7g", channel: "Someone", duration: 3882, views: undefined },
   ]);
+});
+
+test("parsePlaylistSearch keeps the playlists, with a still from YouTube's host", () => {
+  const line = (e: object) => JSON.stringify({ _type: "url", ie_key: "YoutubeTab", ...e });
+  const out = [
+    line({
+      id: "PL6NdkXsPL07KN01gH2vucrHCEyyNmVEx4",
+      title: "Lofi Girl - Compilations",
+      channel: "Lofi Girl",
+      thumbnails: [{ url: "https://i.ytimg.com/vi/a/small.jpg" }, { url: "https://i.ytimg.com/vi/a/big.jpg" }, { url: "https://evil.example/x.jpg" }],
+    }),
+    line({ id: "PL115iZFgSUHaEbv9Why0FV7jvAN4qREdJ", title: "", uploader: "Lofi 747" }),
+    line({ id: "n61ULEU7CO0", ie_key: "Youtube", title: "A video", duration: 10 }),
+    line({ id: "PL6NdkXsPL07KN01gH2vucrHCEyyNmVEx4", title: "Again" }),
+    line({ id: "bad/id", title: "Broken" }),
+  ].join("\n");
+  assert.deepEqual(parsePlaylistSearch(out), [
+    { youtubePlaylistId: "PL6NdkXsPL07KN01gH2vucrHCEyyNmVEx4", title: "Lofi Girl - Compilations", channel: "Lofi Girl", thumbnail: "https://i.ytimg.com/vi/a/big.jpg" },
+    { youtubePlaylistId: "PL115iZFgSUHaEbv9Why0FV7jvAN4qREdJ", title: "PL115iZFgSUHaEbv9Why0FV7jvAN4qREdJ", channel: "Lofi 747", thumbnail: undefined },
+  ]);
+});
+
+test("parsePlaylistInfo lists the videos it can download, and counts the rest", () => {
+  const out = JSON.stringify({
+    _type: "playlist",
+    id: "PLx",
+    title: "Mixes",
+    channel: "Lofi Girl",
+    entries: [
+      { _type: "url", ie_key: "Youtube", id: "_jH2oTNRe7g", title: "cozy autumn", duration: 3882, channel: "Lofi Girl" },
+      { _type: "url", ie_key: "Youtube", id: "aaaaaaaaaaa", title: "[Private video]", duration: null },
+      { _type: "url", ie_key: "Youtube", id: "n61ULEU7CO0", title: "Best of lofi", duration: 22258 },
+    ],
+  });
+  assert.deepEqual(parsePlaylistInfo(out, "PLx"), {
+    youtubePlaylistId: "PLx",
+    title: "Mixes",
+    channel: "Lofi Girl",
+    videos: [
+      { youtubeId: "_jH2oTNRe7g", title: "cozy autumn", channel: "Lofi Girl", duration: 3882, views: undefined },
+      { youtubeId: "n61ULEU7CO0", title: "Best of lofi", channel: undefined, duration: 22258, views: undefined },
+    ],
+    unavailable: 1,
+  });
+  assert.deepEqual(parsePlaylistInfo(JSON.stringify({ title: "Empty" }), "PLy").videos, []);
 });

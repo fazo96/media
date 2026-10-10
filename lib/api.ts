@@ -3,7 +3,8 @@
 // throws an ApiError carrying the server's own message ({ error } in the body).
 // Uploads (with progress) and beacons use XHR and sendBeacon directly.
 
-import type { Job, SearchResult, Video } from "./types";
+import type { Job, Playlist, SearchResults, Video, YoutubePlaylist } from "./types";
+import { playlistUrl } from "./youtube";
 
 export class ApiError extends Error {
   status: number;
@@ -68,7 +69,23 @@ export const requestYoutube = (url: string, replace = false) =>
 
 /** Search YouTube: what it finds (each one can then go to requestYoutube). */
 export const searchYoutube = (query: string, signal?: AbortSignal) =>
-  api<SearchResult[]>(`/api/search?q=${encodeURIComponent(query)}`, { signal });
+  api<SearchResults>(`/api/search?q=${encodeURIComponent(query)}`, { signal });
+
+/** What’s in a YouTube playlist (`list`: its id), nothing downloaded. */
+export const inspectPlaylist = (list: string, signal?: AbortSignal) =>
+  api<YoutubePlaylist>(`/api/youtube/playlist?list=${encodeURIComponent(playlistUrl(list))}`, { signal });
+
+/** Download a whole YouTube playlist into a playlist in the library. */
+export const downloadPlaylist = (list: string) =>
+  api<{ playlist: Playlist; jobs: Job[] }>("/api/playlists", { method: "POST", json: { youtube: playlistUrl(list) } });
+
+/** A new, empty playlist. */
+export const createPlaylist = async (title: string) =>
+  (await api<{ playlist: Playlist }>("/api/playlists", { method: "POST", json: { title } })).playlist;
+
+/** Rename a playlist, or add videos to it (at the end) and take them out. */
+export const changePlaylist = (id: string, change: { title?: string; add?: string[]; remove?: string[] }) =>
+  api<Playlist>(`/api/playlists/${id}`, { method: "PATCH", json: change });
 
 /** Where the player is. As a beacon when the page is going away (it outlives the page). */
 export function saveProgress(id: string, body: { position: number; started?: boolean; ended?: boolean }, beacon = false) {

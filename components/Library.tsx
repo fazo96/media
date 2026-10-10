@@ -1,14 +1,17 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { api, ApiError, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
+import { api, ApiError, createPlaylist, downloadPlaylist, inspectPlaylist, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
 import { local } from "@/lib/storage";
-import type { Job, Video } from "@/lib/types";
-import { parseYoutube } from "@/lib/youtube";
-import JobCard, { type Upload, UploadCard } from "./JobCard";
-import { IconLink, IconSearch, IconSettings, IconUpload } from "./icons";
+import type { Job, Playlist, Video } from "@/lib/types";
+import { parsePlaylist, parseYoutube } from "@/lib/youtube";
+import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
+import { IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
 import Logo from "./Logo";
+import PlaylistCard from "./PlaylistCard";
+import PlaylistPreview, { type Preview } from "./PlaylistPreview";
 import SearchResults, { type Search } from "./SearchResults";
 import ThemeButton from "./ThemeButton";
 import VideoCard from "./VideoCard";
@@ -37,16 +40,24 @@ function sorted(videos: Video[], sort: Sort): Video[] {
 
 const ACTIVE = new Set(["queued", "downloading", "processing"]);
 
-/** The home page: every video, the downloads under way, and the ways in (drop, paste, pick). */
-export default function Library({ initialVideos, initialJobs }: { initialVideos: Video[]; initialJobs: Job[] }) {
+type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
+
+type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[] };
+
+/** The home page: every video and playlist, the downloads under way, and the ways in (drop, paste, pick). */
+export default function Library({ initialVideos, initialJobs, initialPlaylists }: Props) {
+  const router = useRouter();
   const [videos, setVideos] = useState(initialVideos);
   const [jobs, setJobs] = useState(initialJobs);
+  const [playlists, setPlaylists] = useState(initialPlaylists);
   const [uploads, setUploads] = useState<Upload[]>([]);
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
   const [link, setLink] = useState("");
   const [search, setSearch] = useState<Search | null>(null);
-  const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+  const [newList, setNewList] = useState<string | null>(null);
+  const [notice, setNotice] = useState<Notice | null>(null);
   const [dragging, setDragging] = useState(false);
   const fileInput = useRef<HTMLInputElement>(null);
 
@@ -105,27 +116,89 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
 
   const say = (text: string, error = false) => setNotice({ text, error });
 
-  const addLink = useCallback(async (text: string, replace = false) => {
-    const ytId = parseYoutube(text);
-    if (!ytId) {
-      say("That isn’t a YouTube link or video id.", true);
-      return false;
-    }
+  // A YouTube playlist, read whole above the library (a newer one replaces it).
+  const inspecting = useRef<AbortController | null>(null);
+  const openPlaylist = useCallback(async (listId: string) => {
+    inspecting.current?.abort();
+    const abort = new AbortController();
+    inspecting.current = abort;
+    setNotice(null);
+    setPreview({ listId, playlist: null });
     try {
-      const res = await requestYoutube(text, replace);
-      if (res.video) {
-        say(`“${res.video.title}” is already in the library.`);
-      } else if (res.job) {
-        const job = res.job;
-        setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
-        setNotice(null);
-      }
-      return true;
+      const playlist = await inspectPlaylist(listId, abort.signal);
+      setPreview({ listId, playlist });
     } catch (err) {
-      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
-      return false;
+      if (abort.signal.aborted) return;
+      setPreview({ listId, playlist: null, error: err instanceof ApiError ? err.message : "Can’t reach the server." });
     }
   }, []);
+  const closePreview = () => {
+    inspecting.current?.abort();
+    setPreview(null);
+  };
+
+  const addLink = useCallback(
+    async (text: string, replace = false) => {
+      const ytId = parseYoutube(text);
+      const listId = parsePlaylist(text);
+      if (!ytId) {
+        if (listId) {
+          void openPlaylist(listId);
+          return true;
+        }
+        say("That isn’t a YouTube link or video id.", true);
+        return false;
+      }
+      // A video inside a playlist: just the video, and a way to the rest.
+      const inList = listId ? { label: "Open the playlist", run: () => void openPlaylist(listId) } : undefined;
+      try {
+        const res = await requestYoutube(text, replace);
+        if (res.video) {
+          setNotice({ text: `“${res.video.title}” is already in the library.`, action: inList });
+        } else if (res.job) {
+          const job = res.job;
+          setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
+          setNotice(inList ? { text: "Downloading the video. It’s part of a playlist.", action: inList } : null);
+        }
+        return true;
+      } catch (err) {
+        say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+        return false;
+      }
+    },
+    [openPlaylist],
+  );
+
+  const keepPlaylist = (p: Playlist) => setPlaylists((prev) => (prev.some((q) => q.id === p.id) ? prev.map((q) => (q.id === p.id ? p : q)) : [p, ...prev]));
+
+  const downloadAll = async () => {
+    if (!preview) return;
+    try {
+      const { playlist, jobs: queued } = await downloadPlaylist(preview.listId);
+      keepPlaylist(playlist);
+      setJobs((prev) => [...prev.filter((j) => !queued.some((q) => q.id === j.id)), ...queued]);
+      setPreview((p) => (p?.listId === preview.listId && p.playlist ? { ...p, playlist: { ...p.playlist, playlistId: playlist.id } } : p));
+      const n = queued.length;
+      setNotice({
+        text: n ? `Downloading ${n} ${n === 1 ? "video" : "videos"} into “${playlist.title}”.` : `“${playlist.title}” is in the library.`,
+        action: { label: "Open the playlist", run: () => router.push(`/p/${playlist.id}`) },
+      });
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+    }
+  };
+
+  const submitNewList = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const title = newList?.trim();
+    if (!title) return;
+    try {
+      keepPlaylist(await createPlaylist(title));
+      setNewList(null);
+    } catch (err) {
+      say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
+    }
+  };
 
   // Anything that isn't a link is a YouTube search; a newer one replaces it.
   const searching = useRef<AbortController | null>(null);
@@ -148,7 +221,9 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
     setSearch(null);
   };
 
-  const isLink = !link.trim() || parseYoutube(link) !== null;
+  // A playlist link (with no video in it) opens the playlist rather than downloading.
+  const isPlaylistLink = parseYoutube(link) === null && parsePlaylist(link) !== null;
+  const isLink = !link.trim() || parseYoutube(link) !== null || isPlaylistLink;
   const submitLink = async (e: React.FormEvent) => {
     e.preventDefault();
     const text = link.trim();
@@ -234,7 +309,7 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
         return;
       }
       const text = e.clipboardData?.getData("text") ?? "";
-      if (parseYoutube(text)) {
+      if (parseYoutube(text) || parsePlaylist(text)) {
         e.preventDefault();
         void addLink(text);
       }
@@ -248,6 +323,22 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
     const list = q ? videos.filter((v) => `${v.title} ${v.channel ?? ""} ${v.originalName ?? ""}`.toLowerCase().includes(q)) : videos;
     return sorted(list, sort);
   }, [videos, query, sort]);
+  const shownPlaylists = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? playlists.filter((p) => `${p.title} ${p.channel ?? ""}`.toLowerCase().includes(q)) : playlists;
+  }, [playlists, query]);
+  const byId = useMemo(() => new Map(videos.map((v) => [v.id, v])), [videos]);
+
+  // A whole playlist's downloads waiting their turn show as one card per playlist.
+  const { singleJobs, queuedLists } = useMemo(() => {
+    const waiting = new Map<string, Job[]>();
+    for (const j of jobs) if (j.state === "queued" && j.playlistId) waiting.set(j.playlistId, [...(waiting.get(j.playlistId) ?? []), j]);
+    const grouped = new Set([...waiting.values()].filter((g) => g.length > 1).flat());
+    return {
+      singleJobs: jobs.filter((j) => j.state !== "done" && !grouped.has(j)),
+      queuedLists: [...waiting.entries()].filter(([, g]) => g.length > 1),
+    };
+  }, [jobs]);
 
   const remove = (id: string) => setVideos((prev) => prev.filter((v) => v.id !== id));
   const replace = (v: Video) => setVideos((prev) => prev.map((p) => (p.id === v.id ? v : p)));
@@ -255,13 +346,18 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
     setJobs((prev) => prev.filter((j) => j.id !== id));
     await api(`/api/jobs/${id}`, { method: "DELETE" }).catch(() => {});
   };
+  const cancelJobs = async (list: Job[]) => {
+    const ids = new Set(list.map((j) => j.id));
+    setJobs((prev) => prev.filter((j) => !ids.has(j.id)));
+    await Promise.all(list.map((j) => api(`/api/jobs/${j.id}`, { method: "DELETE" }).catch(() => {})));
+  };
   const retryJob = async (j: Job) => {
     await dismissJob(j.id);
     await addLink(j.url, true);
   };
 
   const pending = jobs.length + uploads.length;
-  const empty = videos.length === 0 && pending === 0;
+  const empty = videos.length === 0 && pending === 0 && playlists.length === 0;
 
   return (
     <div className="app">
@@ -291,7 +387,7 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
       <main className="library">
         <section className="add" aria-label="Add videos">
           <form className="add-link" onSubmit={submitLink}>
-            {isLink ? <IconLink /> : <IconSearch />}
+            {isPlaylistLink ? <IconPlaylist /> : isLink ? <IconLink /> : <IconSearch />}
             <input
               type="text"
               placeholder="Paste a YouTube link, or search YouTube"
@@ -302,7 +398,7 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
               spellCheck={false}
             />
             <button type="submit" className="btn btn-primary" disabled={!link.trim()}>
-              {isLink ? "Download" : "Search"}
+              {isPlaylistLink ? "Open" : isLink ? "Download" : "Search"}
             </button>
           </form>
           <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
@@ -324,13 +420,38 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
         {notice && (
           <p className={`notice ${notice.error ? "is-error" : ""}`} role={notice.error ? "alert" : "status"}>
             {notice.text}
+            {notice.action && (
+              <button type="button" className="link-btn" onClick={notice.action.run}>
+                {notice.action.label}
+              </button>
+            )}
             <button type="button" className="notice-close" onClick={() => setNotice(null)} aria-label="Dismiss">
               ×
             </button>
           </p>
         )}
 
-        {search && <SearchResults search={search} videos={videos} jobs={jobs} onAdd={(ytId) => void addLink(ytId)} onClose={closeSearch} />}
+        {preview && (
+          <PlaylistPreview
+            preview={preview}
+            videos={videos}
+            jobs={jobs}
+            onAdd={(ytId) => void addLink(ytId)}
+            onDownloadAll={downloadAll}
+            onClose={closePreview}
+          />
+        )}
+
+        {search && (
+          <SearchResults
+            search={search}
+            videos={videos}
+            jobs={jobs}
+            onAdd={(ytId) => void addLink(ytId)}
+            onOpenPlaylist={(listId) => void openPlaylist(listId)}
+            onClose={closeSearch}
+          />
+        )}
 
         {empty ? (
           <section className="empty">
@@ -345,6 +466,47 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
           </section>
         ) : (
           <>
+            <section className="playlists" aria-label="Playlists">
+              <div className="shelf-head">
+                <h2 className="shelf-title">
+                  Playlists <span className="count">{playlists.length}</span>
+                </h2>
+                {newList === null ? (
+                  <button type="button" className="btn btn-small" onClick={() => setNewList("")}>
+                    <IconPlus /> New playlist
+                  </button>
+                ) : (
+                  <form className="new-playlist" onSubmit={submitNewList}>
+                    <input
+                      value={newList}
+                      onChange={(e) => setNewList(e.target.value)}
+                      onKeyDown={(e) => e.key === "Escape" && setNewList(null)}
+                      placeholder="Name"
+                      aria-label="New playlist name"
+                      autoFocus
+                    />
+                    <button type="submit" className="btn btn-primary btn-small" disabled={!newList.trim()}>
+                      Create
+                    </button>
+                    <button type="button" className="btn btn-quiet btn-small" onClick={() => setNewList(null)}>
+                      Cancel
+                    </button>
+                  </form>
+                )}
+              </div>
+              {shownPlaylists.length > 0 ? (
+                <ul className="grid">
+                  {shownPlaylists.map((p) => (
+                    <li key={p.id}>
+                      <PlaylistCard playlist={p} byId={byId} />
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                !query && <p className="playlists-hint">Make one here, or add videos to one from their ⋯ menu. A YouTube playlist link downloads a whole one.</p>
+              )}
+            </section>
+
             <div className="shelf-head">
               <h1 className="shelf-title">
                 Library <span className="count">{videos.length}</span>
@@ -369,16 +531,26 @@ export default function Library({ initialVideos, initialJobs }: { initialVideos:
                   <UploadCard upload={u} onDismiss={() => setUploads((prev) => prev.filter((p) => p.key !== u.key))} />
                 </li>
               ))}
-              {jobs
-                .filter((j) => j.state !== "done")
-                .map((j) => (
+              {singleJobs.map((j) => (
                 <li key={j.id}>
                   <JobCard job={j} onDismiss={() => dismissJob(j.id)} onRetry={() => retryJob(j)} />
                 </li>
               ))}
+              {queuedLists.map(([pid, group]) => (
+                <li key={`queued-${pid}`}>
+                  <QueuedPlaylistCard title={playlists.find((p) => p.id === pid)?.title ?? "A playlist"} jobs={group} onCancel={() => cancelJobs(group)} />
+                </li>
+              ))}
               {shown.map((v) => (
                 <li key={v.id}>
-                  <VideoCard video={v} onRemoved={remove} onChanged={replace} onRedownload={() => addLink(v.url ?? "", true)} />
+                  <VideoCard
+                    video={v}
+                    onRemoved={remove}
+                    onChanged={replace}
+                    onRedownload={() => addLink(v.url ?? "", true)}
+                    playlists={playlists}
+                    onPlaylistChanged={keepPlaylist}
+                  />
                 </li>
               ))}
             </ul>

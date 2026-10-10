@@ -2,7 +2,7 @@
 // be reached (docs/pages.md, "Offline"). Registered by
 // components/ServiceWorker.tsx.
 //
-// Pages this device opened (the library, a player, settings) are kept and
+// Pages this device opened (the library, a player, a playlist, settings) are kept and
 // served when the network fails, else offline.html. The app's own files under
 // /_next/static are named by their content, so they're served from here
 // first. Everything else, the API and the videos above all, goes to the
@@ -20,7 +20,7 @@ const FILES_MAX_AGE = 30 * 24 * 60 * 60 * 1000;
 
 /** The page's cache key; null for pages not kept. */
 function pageKey(url) {
-  if (url.pathname === "/" || url.pathname === "/settings" || /^\/v\/[^/]+$/.test(url.pathname)) return url.pathname;
+  if (url.pathname === "/" || url.pathname === "/settings" || /^\/[vp]\/[^/]+$/.test(url.pathname)) return url.pathname;
   return null;
 }
 

@@ -7,6 +7,16 @@ import { randomBytes } from "node:crypto";
 import { link, mkdir, rename, unlink, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+// Read-change-write of one file goes one call at a time (per key, its path).
+const queues = new Map<string, Promise<unknown>>();
+export function serially<T>(key: string, fn: () => Promise<T>): Promise<T> {
+  const next = (queues.get(key) ?? Promise.resolve()).then(fn, fn);
+  const tail = next.catch(() => {});
+  queues.set(key, tail);
+  void tail.then(() => queues.get(key) === tail && queues.delete(key));
+  return next;
+}
+
 const tmpFor = (file: string) => `${file}.${process.pid}.${randomBytes(4).toString("hex")}.tmp`;
 
 async function writeTmp(file: string, data: string | Uint8Array, mode?: number): Promise<string> {

@@ -21,6 +21,35 @@ if (search) {
   }
   process.exit(0);
 }
+
+// A playlist search (YouTube's results page) finds two playlists named after
+// the query, with the ids "PL" + the query; query "nothing" finds none.
+if (id.startsWith("https://www.youtube.com/results?")) {
+  const query = new URL(id).searchParams.get("search_query") ?? "";
+  if (query !== "nothing") {
+    for (const n of [1, 2]) {
+      console.log(JSON.stringify({ _type: "url", ie_key: "YoutubeTab", id: `PL${query.replace(/[^A-Za-z0-9]/g, "")}${n}`, title: `List ${query} ${n}`, channel: "Stub channel" }));
+    }
+  }
+  process.exit(0);
+}
+
+// A playlist (…/playlist?list=<id>) holds three videos, "p" + the id's last
+// nine characters + 1, 2 and 3, and a private video that has to be left out.
+// A list id ending in "missing" doesn't exist.
+if (id.includes("/playlist?list=")) {
+  const list = new URL(id).searchParams.get("list");
+  if (list.endsWith("missing")) {
+    console.error(`ERROR: [youtube:tab] ${list}: The playlist does not exist.`);
+    process.exit(1);
+  }
+  const base = list.replace(/[^A-Za-z0-9]/g, "").slice(-9).padStart(9, "0");
+  const entries = [1, 2, 3].map((n) => ({ _type: "url", ie_key: "Youtube", id: `p${base}${n}`, title: `Listed ${list} ${n}`, channel: "Stub channel", duration: 30 }));
+  entries.splice(1, 0, { _type: "url", ie_key: "Youtube", id: "privatevid0", title: "[Private video]", duration: null });
+  console.log(JSON.stringify({ _type: "playlist", id: list, title: `Stub playlist ${list}`, channel: "Stub channel", entries }));
+  process.exit(0);
+}
+
 const outputs = [];
 for (let i = 0; i < args.length; i++) if (args[i] === "-o") outputs.push(args[i + 1]);
 const videoTemplate = outputs.find((o) => !/^\w+:/.test(o));

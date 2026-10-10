@@ -3,7 +3,7 @@ import { badRequest, fail, noStore, route } from "@/lib/route";
 
 export const dynamic = "force-dynamic";
 
-/** Search YouTube: `?q=…`; the videos found, in YouTube's order. */
+/** Search YouTube: `?q=…`; `{ videos, playlists }`, each in YouTube’s order. */
 export const GET = route(async (req) => {
   const q = new URL(req.url).searchParams.get("q")?.trim() ?? "";
   if (!q) return badRequest("Type something to search for.");

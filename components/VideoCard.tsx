@@ -4,21 +4,25 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, apiDelete } from "@/lib/api";
 import { formatAgo, formatDuration } from "@/lib/format";
-import type { Video } from "@/lib/types";
-import { IconEdit, IconExternal, IconFilm, IconMore, IconRefresh, IconTrash, IconWarn } from "./icons";
+import type { Playlist, Video } from "@/lib/types";
+import { IconEdit, IconExternal, IconFilm, IconMore, IconPlaylist, IconRefresh, IconTrash, IconWarn } from "./icons";
+import PlaylistPicker from "./PlaylistPicker";
 
 type Props = {
   video: Video;
   onRemoved: (id: string) => void;
   onChanged: (v: Video) => void;
   onRedownload: () => void;
+  playlists: Playlist[];
+  onPlaylistChanged: (p: Playlist) => void;
 };
 
 export const thumbUrl = (v: Video) => `/api/videos/${v.id}/thumb?v=${v.addedAt}`;
 
 /** One video in the grid: its still, how far it was watched, and a menu. */
-export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload }: Props) {
-  const [menu, setMenu] = useState(false);
+export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload, playlists, onPlaylistChanged }: Props) {
+  // The menu, or its second page: the playlists.
+  const [menu, setMenu] = useState<false | "main" | "playlists">(false);
   const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
   const [title, setTitle] = useState(v.title);
   const [error, setError] = useState<string | null>(null);
@@ -131,12 +135,15 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
           className="icon-btn"
           aria-label={`More for ${v.title}`}
           aria-haspopup="menu"
-          aria-expanded={menu}
-          onClick={() => setMenu((m) => !m)}
+          aria-expanded={menu !== false}
+          onClick={() => setMenu((m) => (m ? false : "main"))}
         >
           <IconMore />
         </button>
-        {menu && (
+        {menu === "playlists" && (
+          <PlaylistPicker videoId={v.id} playlists={playlists} onChanged={onPlaylistChanged} onError={setError} />
+        )}
+        {menu === "main" && (
           <div className="menu" role="menu">
             <button type="button" role="menuitem" onClick={pick(() => {
                 setTitle(v.title);
@@ -144,6 +151,9 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
               })}
             >
               <IconEdit /> Rename
+            </button>
+            <button type="button" role="menuitem" onClick={() => setMenu("playlists")}>
+              <IconPlaylist /> Add to playlist…
             </button>
             {v.source === "youtube" && v.url && (
               <>

@@ -2,7 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
-import { writeAtomic } from "./files";
+import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
 import { MIME, plan, probe, remux, thumbnail } from "./probe";
@@ -38,24 +38,17 @@ export async function listVideos(): Promise<Video[]> {
 
 export const getVideo = (id: string) => readMeta(id);
 
-// Writes to one video's meta.json go one at a time, so a progress save and a
-// rename landing together don't undo each other.
-const queues = new Map<string, Promise<unknown>>();
-function serially<T>(id: string, fn: () => Promise<T>): Promise<T> {
-  const next = (queues.get(id) ?? Promise.resolve()).then(fn, fn);
-  const tail = next.catch(() => {});
-  queues.set(id, tail);
-  void tail.then(() => queues.get(id) === tail && queues.delete(id));
-  return next;
-}
-
-/** Change a video's meta.json; null when there's no such video. */
+/**
+ * Change a video's meta.json; null when there's no such video. One at a time,
+ * so a progress save and a rename landing together don't undo each other.
+ */
 export function updateVideo(id: string, change: (v: Video) => Video): Promise<Video | null> {
-  return serially(id, async () => {
+  const file = path.join(videoDir(id), META);
+  return serially(file, async () => {
     const v = await readMeta(id);
     if (!v) return null;
     const next = { ...change(v), id };
-    await writeAtomic(path.join(videoDir(id), META), JSON.stringify(next, null, 2));
+    await writeAtomic(file, JSON.stringify(next, null, 2));
     return next;
   });
 }

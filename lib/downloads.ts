@@ -4,9 +4,10 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import path from "node:path";
 import { youtubeVideoId } from "./ids";
 import { addVideo, getVideo, incomingDir } from "./library";
+import { createPlaylist, findYoutubePlaylist, updatePlaylist } from "./playlists";
 import { run } from "./tools";
-import type { Job, SearchResult } from "./types";
-import { parseYoutube, youtubeUrl } from "./youtube";
+import type { Job, Playlist, PlaylistResult, SearchResult, SearchResults, YoutubePlaylist } from "./types";
+import { parsePlaylist, parseYoutube, playlistUrl, youtubeUrl } from "./youtube";
 
 // YouTube downloads (docs/downloads.md): a queue in memory, one yt-dlp at a
 // time. Jobs that end stay listed (done or failed) until dismissed or the
@@ -46,8 +47,11 @@ const state: State = (g.__mediaDownloads ??= { jobs: new Map(), aborts: new Map(
 export const listJobs = () => [...state.jobs.values()].sort((a, b) => a.createdAt - b.createdAt);
 export const getJob = (id: string) => state.jobs.get(id) ?? null;
 
-/** Queue a download; an unfinished job for the same video is answered instead. */
-export function enqueue(ytId: string): Job {
+/**
+ * Queue a download; an unfinished job for the same video is answered instead.
+ * `playlistId` marks it as part of a whole playlist's (the page groups those).
+ */
+export function enqueue(ytId: string, playlistId?: string): Job {
   const active = listJobs().find((j) => j.youtubeId === ytId && (j.state === "queued" || j.state === "downloading" || j.state === "processing"));
   if (active) return active;
   const job: Job = {
@@ -57,6 +61,7 @@ export function enqueue(ytId: string): Job {
     state: "queued",
     progress: null,
     stream: 0,
+    playlistId,
     createdAt: Date.now(),
   };
   state.jobs.set(job.id, job);
@@ -166,32 +171,71 @@ async function download(job: Job) {
 /** The video already in the library for this YouTube id, if any. */
 export const existing = (ytId: string) => getVideo(youtubeVideoId(ytId));
 
+/**
+ * Download a whole YouTube playlist: make it a playlist in the library (or
+ * add what's new to the one made from it before), and queue every video not
+ * in the library yet, in order.
+ */
+export async function downloadPlaylist(listId: string, signal?: AbortSignal): Promise<{ playlist: Playlist; jobs: Job[] }> {
+  const yt = await inspectPlaylist(listId, signal);
+  const items = yt.videos.map((v) => youtubeVideoId(v.youtubeId));
+  const found = await findYoutubePlaylist(listId);
+  const playlist =
+    (found && (await updatePlaylist(found.id, (p) => ({ ...p, items: [...p.items, ...items] })))) ??
+    (await createPlaylist({ title: yt.title, youtubePlaylistId: listId, url: playlistUrl(listId), channel: yt.channel, items }));
+  const jobs: Job[] = [];
+  for (const v of yt.videos) if (!(await existing(v.youtubeId))) jobs.push(enqueue(v.youtubeId, playlist.id));
+  return { playlist, jobs };
+}
+
 /** How many videos a search asks YouTube for. */
 const SEARCH_RESULTS = 20;
 
-type Entry = { id?: unknown; ie_key?: unknown; title?: unknown; channel?: unknown; uploader?: unknown; duration?: unknown; view_count?: unknown };
+/** How many playlists a search asks YouTube for. */
+const SEARCH_PLAYLISTS = 6;
+
+type Entry = {
+  id?: unknown;
+  ie_key?: unknown;
+  title?: unknown;
+  channel?: unknown;
+  uploader?: unknown;
+  duration?: unknown;
+  view_count?: unknown;
+  thumbnails?: unknown;
+  entries?: unknown;
+};
+
+const str = (s: unknown) => (typeof s === "string" && s ? s : undefined);
+const channelOf = (e: Entry) => str(e.channel) ?? str(e.uploader);
+
+function jsonLines(out: string): Entry[] {
+  const entries: Entry[] = [];
+  for (const line of out.split("\n")) {
+    try {
+      const e = JSON.parse(line);
+      if (e && typeof e === "object") entries.push(e);
+    } catch {}
+  }
+  return entries;
+}
 
 /**
- * yt-dlp's --dump-json lines for a search, as results. Only videos, and only
- * ones with a length: live streams have none, and their download never ends.
+ * yt-dlp's flat entries (a search's, a playlist's) as results. Only videos,
+ * and only ones with a length: live streams have none, and their download
+ * never ends; private and deleted videos have none either.
  */
-export function parseSearch(out: string): SearchResult[] {
+function toResults(entries: Entry[]): SearchResult[] {
   const results: SearchResult[] = [];
-  for (const line of out.split("\n")) {
-    let e: Entry;
-    try {
-      e = JSON.parse(line);
-    } catch {
-      continue;
-    }
+  for (const e of entries) {
     const id = typeof e.id === "string" ? parseYoutube(e.id) : null;
     if (!id || (e.ie_key !== undefined && e.ie_key !== "Youtube")) continue;
     if (typeof e.duration !== "number" || !(e.duration > 0)) continue;
     if (results.some((r) => r.youtubeId === id)) continue;
     results.push({
       youtubeId: id,
-      title: typeof e.title === "string" && e.title ? e.title : id,
-      channel: typeof e.channel === "string" ? e.channel : typeof e.uploader === "string" ? e.uploader : undefined,
+      title: str(e.title) ?? id,
+      channel: channelOf(e),
       duration: e.duration,
       views: typeof e.view_count === "number" ? e.view_count : undefined,
     });
@@ -199,8 +243,56 @@ export function parseSearch(out: string): SearchResult[] {
   return results;
 }
 
-/** Search YouTube. --flat-playlist reads only the results page, not each video, so it takes seconds. */
-export async function searchYoutube(query: string, signal?: AbortSignal): Promise<SearchResult[]> {
-  const out = await run("yt-dlp", ["--flat-playlist", "--dump-json", "--no-warnings", "--", `ytsearch${SEARCH_RESULTS}:${query}`], { signal });
-  return parseSearch(out);
+/** yt-dlp's --dump-json lines for a video search, as results. */
+export const parseSearch = (out: string) => toResults(jsonLines(out));
+
+/** The biggest still yt-dlp lists, if it's on YouTube's image host (the page loads it). */
+function thumbnailOf(e: Entry): string | undefined {
+  if (!Array.isArray(e.thumbnails)) return undefined;
+  const urls = e.thumbnails.map((t) => (t as { url?: unknown })?.url).filter((u): u is string => typeof u === "string");
+  return urls.reverse().find((u) => u.startsWith("https://i.ytimg.com/"));
+}
+
+/** yt-dlp's --dump-json lines for a playlist search, as results. */
+export function parsePlaylistSearch(out: string): PlaylistResult[] {
+  const results: PlaylistResult[] = [];
+  for (const e of jsonLines(out)) {
+    const id = typeof e.id === "string" ? parsePlaylist(playlistUrl(e.id)) : null;
+    if (!id || e.ie_key !== "YoutubeTab" || results.some((r) => r.youtubePlaylistId === id)) continue;
+    results.push({ youtubePlaylistId: id, title: str(e.title) ?? id, channel: channelOf(e), thumbnail: thumbnailOf(e) });
+  }
+  return results;
+}
+
+/** YouTube's results page, showing only playlists (the `sp` filter its own Filters menu sets). */
+const playlistSearchUrl = (query: string) => `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}&sp=EgIQAw%253D%253D`;
+
+/**
+ * Search YouTube for videos and playlists at once. --flat-playlist reads only
+ * the results pages, not each video, so it takes seconds. Playlists are a
+ * bonus: when only their search fails, the videos are still answered.
+ */
+export async function searchYoutube(query: string, signal?: AbortSignal): Promise<SearchResults> {
+  const flat = ["--flat-playlist", "--dump-json", "--no-warnings"];
+  const [videos, playlists] = await Promise.all([
+    run("yt-dlp", [...flat, "--", `ytsearch${SEARCH_RESULTS}:${query}`], { signal }).then(parseSearch),
+    run("yt-dlp", [...flat, "-I", `:${SEARCH_PLAYLISTS}`, "--", playlistSearchUrl(query)], { signal })
+      .then(parsePlaylistSearch)
+      .catch(() => []),
+  ]);
+  return { videos, playlists };
+}
+
+/** yt-dlp's --dump-single-json for a playlist: what's in it. */
+export function parsePlaylistInfo(out: string, listId: string): YoutubePlaylist {
+  const info = JSON.parse(out) as Entry;
+  const entries = Array.isArray(info.entries) ? (info.entries as Entry[]) : [];
+  const videos = toResults(entries);
+  return { youtubePlaylistId: listId, title: str(info.title) ?? listId, channel: channelOf(info), videos, unavailable: entries.length - videos.length };
+}
+
+/** Read a whole YouTube playlist: its title and every video in it (flat: about 5s for a hundred). */
+export async function inspectPlaylist(listId: string, signal?: AbortSignal): Promise<YoutubePlaylist> {
+  const out = await run("yt-dlp", ["--flat-playlist", "--dump-single-json", "--no-warnings", "--", playlistUrl(listId)], { signal });
+  return parsePlaylistInfo(out, listId);
 }

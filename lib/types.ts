@@ -52,6 +52,8 @@ export type Job = {
   error?: string;
   /** The video, once done. */
   videoId?: string;
+  /** The playlist it was queued for, when a whole one was. */
+  playlistId?: string;
   createdAt: number;
 };
 
@@ -63,6 +65,45 @@ export type SearchResult = {
   /** Seconds. */
   duration: number;
   views?: number;
+};
+
+/** A playlist found by searching YouTube. YouTube's search doesn't say how long it is. */
+export type PlaylistResult = {
+  youtubePlaylistId: string;
+  title: string;
+  channel?: string;
+  /** A still on i.ytimg.com. */
+  thumbnail?: string;
+};
+
+/** What GET /api/search answers. */
+export type SearchResults = { videos: SearchResult[]; playlists: PlaylistResult[] };
+
+/** A YouTube playlist read whole (GET /api/youtube/playlist). */
+export type YoutubePlaylist = {
+  youtubePlaylistId: string;
+  title: string;
+  channel?: string;
+  /** The ones that can be downloaded, in order. */
+  videos: SearchResult[];
+  /** Private, deleted and live ones, left out. */
+  unavailable: number;
+  /** The library's playlist made from it, if it was downloaded before. */
+  playlistId?: string;
+};
+
+/** A playlist in the library (MEDIA_DIR/playlists/<id>.json). */
+export type Playlist = {
+  id: string;
+  title: string;
+  /** Set when it came from YouTube: its id, link and channel. */
+  youtubePlaylistId?: string;
+  url?: string;
+  channel?: string;
+  /** Video ids, in order. Some may not be in the library: downloading, failed, or deleted since. */
+  items: string[];
+  createdAt: number;
+  updatedAt: number;
 };
 
 export type ToolStatus = { name: string; command: string[] | null; version?: string; error?: string };

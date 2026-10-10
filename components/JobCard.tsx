@@ -64,6 +64,29 @@ export default function JobCard({ job, onDismiss, onRetry }: { job: Job; onDismi
   );
 }
 
+/** A playlist's downloads still waiting their turn, as one card rather than one each. */
+export function QueuedPlaylistCard({ title, jobs, onCancel }: { title: string; jobs: Job[]; onCancel: () => void }) {
+  return (
+    <article className="card card-pending" data-queued-playlist>
+      <div className="thumb">
+        <img src={`https://i.ytimg.com/vi/${jobs[0].youtubeId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} />
+        <Progress value={null} />
+      </div>
+      <div className="card-body">
+        <h2 className="card-title">{title}</h2>
+        <p className="card-meta">
+          {jobs.length} more {jobs.length === 1 ? "video" : "videos"} waiting their turn
+        </p>
+      </div>
+      <div className="card-actions">
+        <button type="button" className="icon-btn" onClick={onCancel} aria-label="Cancel the rest" title="Cancel the rest">
+          <IconClose />
+        </button>
+      </div>
+    </article>
+  );
+}
+
 /** A dropped file on its way up. */
 export function UploadCard({ upload, onDismiss }: { upload: Upload; onDismiss: () => void }) {
   const failed = upload.state === "failed";

@@ -32,6 +32,17 @@ export function youtubeVideoId(ytId: string): string {
   return `yt-${ytId.toLowerCase()}-${mask.toString(36)}`;
 }
 
+const YT_VIDEO_ID = /^yt-([a-z0-9_-]{11})-([a-z0-9]+)$/;
+
+/** The YouTube id youtubeVideoId() made `id` from; null for a video that isn't one. */
+export function youtubeIdFromVideoId(id: string): string | null {
+  const m = YT_VIDEO_ID.exec(id);
+  if (!m) return null;
+  const mask = Number.parseInt(m[2], 36);
+  const yt = [...m[1]].map((c, i) => (mask & (1 << i) ? c.toUpperCase() : c)).join("");
+  return youtubeVideoId(yt) === id ? yt : null;
+}
+
 /** A download job's id (in memory only). */
 const JOB_RE = /^[a-z0-9]{8,32}$/;
 export const isValidJobId = (id: unknown): id is string => typeof id === "string" && JOB_RE.test(id);

@@ -9,6 +9,8 @@ export const MEDIA_DIR = path.resolve(
 );
 
 export const VIDEOS_DIR = path.join(MEDIA_DIR, "videos");
+/** One <id>.json per playlist. */
+export const PLAYLISTS_DIR = path.join(MEDIA_DIR, "playlists");
 /** Deleted videos, kept until someone empties it by hand. */
 export const TRASH_DIR = path.join(MEDIA_DIR, ".trash");
 /** Uploads and downloads in progress; emptied when the server starts. */

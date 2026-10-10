@@ -9,7 +9,10 @@
 | `GET /api/videos/<id>/thumb` | The still (the page adds `?v=<addedAt>` so a re-download's isn't hidden by the cache) |
 | `POST /api/videos/<id>/progress` | `{ position, started?, ended? }`: `started` counts a play, `ended` resets the position. Read as text, so `sendBeacon` works |
 | `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) |
-| `GET /api/search?q=…` | Search YouTube ([downloads](downloads.md#searching)): up to 20 videos, `SearchResult[]`; 400 for an empty or over-200-character query, 502 with yt-dlp's error, 504 after 60s |
+| `GET /api/search?q=…` | Search YouTube ([downloads](downloads.md#searching)): `{ videos, playlists }`, up to 20 videos and 6 playlists; 400 for an empty or over-200-character query, 502 with yt-dlp's error, 504 after 60s |
+| `GET /api/youtube/playlist?list=…` | A YouTube playlist read whole ([downloads](downloads.md#playlists)), `YoutubePlaylist`, with `playlistId` when it was downloaded before; nothing is downloaded. 400 when `list` isn't a playlist link or id, 502, 504 |
+| `GET/POST /api/playlists` | Every playlist, newest first; make one: `{ title }` (201 `{ playlist }`), or `{ youtube: <link or id> }` to download a whole YouTube playlist (201 `{ playlist, jobs }`; 502, 504 as above) |
+| `GET/PATCH/DELETE /api/playlists/<id>` | One playlist; `{ title?, add?, remove? }` (video ids: `add` must be in the library, and goes at the end); to the trash, its videos staying |
 | `GET /api/tools` | yt-dlp, ffmpeg, ffprobe: how each runs, its version |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 

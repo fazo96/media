@@ -69,6 +69,25 @@ export const IconPlus = (p: P) => (
   </svg>
 );
 
+export const IconCheck = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M4.5 10.5l3.5 3.5 7.5-8" />
+  </svg>
+);
+
+export const IconPlaylist = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3.5 5.5h13M3.5 10h8M3.5 14.5h6" />
+    <path d="M13.5 11.5v5l4-2.5z" fill="currentColor" />
+  </svg>
+);
+
+export const IconNext = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M5 5v10l7.5-5zM15 5v10" />
+  </svg>
+);
+
 export const IconBack = (p: P) => (
   <svg {...base} {...p}>
     <path d="M12 4.5L6.5 10l5.5 5.5" />
