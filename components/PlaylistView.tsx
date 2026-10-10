@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useState } from "react";
-import { ApiError, changePlaylist, deletePlaylist, errorMessage, getPlaylist, listJobs, listVideos, requestYoutube } from "@/lib/api";
+import { changePlaylist, deletePlaylist, errorMessage, requestYoutube } from "@/lib/api";
 import { playlistCount, sourceLabel } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
 import { inLibrary, isActive, isAudio, type Job, type Playlist, type Video } from "@/lib/types";
@@ -15,6 +15,7 @@ import MediaRow, { Still } from "./MediaRow";
 import Notice from "./Notice";
 import ShareButton from "./ShareLinks";
 import Topbar, { toLibrary } from "./Topbar";
+import { useLibrary } from "./useLibrary";
 import YtThumb from "./YtThumb";
 
 type Props = { initialPlaylist: Playlist; initialVideos: Video[]; initialJobs: Job[] };
@@ -22,64 +23,27 @@ type Props = { initialPlaylist: Playlist; initialVideos: Video[]; initialJobs: J
 /** A playlist: its videos in order, played through from the top; renamed, trimmed or deleted here. */
 export default function PlaylistView({ initialPlaylist, initialVideos, initialJobs }: Props) {
   const router = useRouter();
-  const [p, setP] = useState(initialPlaylist);
-  const [videos, setVideos] = useState(initialVideos);
-  const [jobs, setJobs] = useState(initialJobs);
+  const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: [initialPlaylist] });
+  const { videos, jobs, keepPlaylist } = lib;
+  // As the library has it now; gone meanwhile (once it's been asked), to the library.
+  const found = lib.playlists.find((x) => x.id === initialPlaylist.id);
+  const p = found ?? initialPlaylist;
   const [mode, setMode] = useState<"idle" | "rename" | "delete">("idle");
   const [error, setError] = useState<string | null>(null);
   const fail = (err: unknown) => setError(errorMessage(err));
 
+  useEffect(() => {
+    if (lib.synced && !found) router.replace("/");
+  }, [lib.synced, found, router]);
+
   const byId = new Map(videos.map((v) => [v.id, v]));
   const present = inLibrary(p.items, byId);
-  const jobFor = (ytId: string | null) => (ytId ? jobs.find((j) => j.youtubeId === ytId && (isActive(j) || j.state === "failed")) : undefined);
-
-  // Back from the player brings this page back as it was left (see Library):
-  // catch up when it mounts or shows again. Gone meanwhile: to the library.
-  useEffect(() => {
-    const catchUp = async () => {
-      try {
-        const jobsNow = await listJobs();
-        const [list, all] = await Promise.all([getPlaylist(initialPlaylist.id), listVideos()]);
-        setJobs(jobsNow);
-        setP(list);
-        setVideos(all);
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 404) router.replace("/");
-      }
-    };
-    void catchUp();
-    const onShow = (e: PageTransitionEvent) => e.persisted && void catchUp();
-    window.addEventListener("pageshow", onShow);
-    return () => window.removeEventListener("pageshow", onShow);
-  }, [initialPlaylist.id, router]);
-
-  // While any of its videos downloads, follow along; one that lands joins the list.
-  const following = p.items.some((id) => {
-    const j = jobFor(youtubeIdFromVideoId(id));
-    return j && isActive(j);
-  });
-  useEffect(() => {
-    if (!following) return;
-    let stop = false;
-    const timer = setInterval(async () => {
-      try {
-        // Jobs first: a job seen done has its video in the list fetched after.
-        const nextJobs = await listJobs();
-        const all = await listVideos();
-        if (stop) return;
-        setJobs(nextJobs);
-        setVideos(all);
-      } catch {}
-    }, 2000);
-    return () => {
-      stop = true;
-      clearInterval(timer);
-    };
-  }, [following]);
+  // The latest: one tried again comes after the one that failed.
+  const jobFor = (ytId: string | null) => (ytId ? jobs.findLast((j) => j.youtubeId === ytId && (isActive(j) || j.state === "failed")) : undefined);
 
   const rename = async (title: string) => {
     try {
-      setP(await changePlaylist(p.id, { title }));
+      keepPlaylist(await changePlaylist(p.id, { title }));
     } catch (err) {
       fail(err);
       throw err;
@@ -88,7 +52,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
 
   const remove = async (id: string) => {
     try {
-      setP(await changePlaylist(p.id, { remove: [id] }));
+      keepPlaylist(await changePlaylist(p.id, { remove: [id] }));
     } catch (err) {
       fail(err);
     }
@@ -97,9 +61,8 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const download = async (ytId: string) => {
     try {
       const res = await requestYoutube(ytId);
-      const job = res.job;
-      if (job) setJobs((prev) => [...prev.filter((j) => j.youtubeId !== ytId), job]);
-      if (res.video) setVideos((prev) => [...prev, res.video as Video]);
+      if (res.job) lib.keepJobs([res.job]);
+      if (res.video) lib.keepVideo(res.video);
     } catch (err) {
       fail(err);
     }
@@ -121,8 +84,8 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const toggleListen = async () => {
     const listen = !allListen;
     try {
-      setP(await changePlaylist(p.id, { listen }));
-      setVideos((prev) => prev.map((v) => (p.items.includes(v.id) && !isAudio(v) ? { ...v, listen } : v)));
+      keepPlaylist(await changePlaylist(p.id, { listen }));
+      lib.updateVideos((v) => (p.items.includes(v.id) && !isAudio(v) ? { ...v, listen } : v));
     } catch (err) {
       fail(err);
     }

@@ -4,7 +4,7 @@ Pieces they share: the top bar (`components/Topbar.tsx`: back or the wordmark, t
 
 ## The library (`/`, `components/Library.tsx`)
 
-Server-rendered with every video, playlist and the current downloads, then kept fresh in the browser. Back and Forward bring a page back as it was left without asking the server (Next's router cache, or the browser's back-forward cache), so the library and a playlist's page fetch their data again whenever they mount or show again (`pageshow`). The ways in:
+Server-rendered with every video, playlist and the current downloads, then kept fresh in the browser. Back and Forward bring a page back as it was left without asking the server (Next's router cache, or the browser's back-forward cache), so the library and a playlist's page fetch their data again whenever they mount or show again (`pageshow`). Both keep it with `useLibrary()` (`components/useLibrary.ts`), which also follows the downloads (below). The page's parts: `AddBar` (the link or search box, Add files, Transmission), `useYoutube` (search, a playlist's preview, downloading), `useUploads` and `useDropAndPaste` (`components/useUploads.ts`), `PlaylistShelf`, and the grid. The ways in:
 
 - **Drop** video or music files anywhere on the page (a window-level drag listener shows the drop target), or **Add files**. Uploads go one at a time (XHR, for upload progress; `uploadVideo` in `lib/api.ts`) and show as cards until their video replaces them.
 - **Paste** a YouTube link in the box, or anywhere on the page outside a text field: a link `parseYoutube` recognizes starts a download straight away. Pasted files upload.
@@ -21,7 +21,7 @@ Sorting (recently watched, most watched, recently added, A–Z) is remembered pe
 
 ## A playlist (`/p/<id>`, `components/PlaylistView.tsx`)
 
-Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. **Listen** turns [listen mode](#listen-mode) on for all its videos (or, when they all have it, off): it's theirs, so it holds wherever they play. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay). Videos not in the library show greyed: downloading (followed every 2 seconds), not downloaded (a YouTube one, with a retry and a link), or deleted.
+Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. **Listen** turns [listen mode](#listen-mode) on for all its videos (or, when they all have it, off): it's theirs, so it holds wherever they play. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay). Videos not in the library show greyed: downloading (followed every second, as the library follows them), not downloaded (a YouTube one, with a retry and a link), or deleted.
 
 ## The player (`/v/<id>`, `components/Player.tsx`)
 

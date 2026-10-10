@@ -1,64 +1,40 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import {
-  createPlaylist,
-  dismissJob as dismiss,
-  downloadPlaylist,
-  errorMessage,
-  importTorrent,
-  inspectPlaylist,
-  listJobs,
-  listPlaylists,
-  listVideos,
-  requestYoutube,
-  searchYoutube,
-  uploadVideo,
-} from "@/lib/api";
-import { local } from "@/lib/storage";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { errorMessage, importTorrent } from "@/lib/api";
 import { isSort, SORTS, type Sort, sorted } from "@/lib/sort";
-import { type DiskUsage, isActive, type Job, type Playlist, type Video } from "@/lib/types";
-import { parsePlaylist, parseYoutube } from "@/lib/youtube";
-import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
-import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconUpload } from "./icons";
+import { local } from "@/lib/storage";
+import type { DiskUsage, Job, Playlist, Video } from "@/lib/types";
+import AddBar from "./AddBar";
+import JobCard, { QueuedPlaylistCard, UploadCard } from "./JobCard";
+import { IconSearch, IconUpload } from "./icons";
 import Logo from "./Logo";
 import Notice from "./Notice";
-import PlaylistCard from "./PlaylistCard";
-import PlaylistPreview, { type Preview } from "./PlaylistPreview";
-import SearchResults, { type Search } from "./SearchResults";
+import PlaylistPreview from "./PlaylistPreview";
+import PlaylistShelf from "./PlaylistShelf";
+import SearchResults from "./SearchResults";
 import StorageMeter from "./StorageMeter";
 import Topbar from "./Topbar";
 import TransmissionPanel from "./TransmissionPanel";
+import { useLibrary } from "./useLibrary";
+import { useDropAndPaste, useUploads } from "./useUploads";
+import { type News, useYoutube } from "./useYoutube";
 import VideoCard from "./VideoCard";
 
 const SORT_KEY = "media:sort";
-
-/** What a file chooser or a drop takes when the browser gives no type: videos, and music. */
-const MEDIA_EXT = /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp|mp3|m4a|m4b|flac|ogg|oga|opus|wav|aac|wma)$/i;
-
-type News = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
 /** `transmission`: importing from Transmission is set up (MEDIA_TRANSMISSION_URL). */
 type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; storage: DiskUsage; transmission: boolean };
 
 /** The home page: every video and playlist, the downloads under way, and the ways in (drop, paste, pick). */
 export default function Library({ initialVideos, initialJobs, initialPlaylists, storage, transmission }: Props) {
-  const router = useRouter();
-  const [videos, setVideos] = useState(initialVideos);
-  const [jobs, setJobs] = useState(initialJobs);
-  const [playlists, setPlaylists] = useState(initialPlaylists);
-  const [uploads, setUploads] = useState<Upload[]>([]);
+  const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: initialPlaylists });
+  const { videos, jobs, playlists, keepJobs, keepPlaylist } = lib;
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
-  const [link, setLink] = useState("");
-  const [search, setSearch] = useState<Search | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
   const [torrents, setTorrents] = useState(false);
-  const [newList, setNewList] = useState<string | null>(null);
   const [notice, setNotice] = useState<News | null>(null);
-  const [dragging, setDragging] = useState(false);
-  const fileInput = useRef<HTMLInputElement>(null);
+  const say = useCallback((text: string) => setNotice({ text, error: true }), []);
 
   useEffect(() => {
     const saved = local.get(SORT_KEY);
@@ -69,272 +45,18 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     local.set(SORT_KEY, s);
   };
 
-  const refresh = useCallback(async () => {
-    try {
-      const [v, p] = await Promise.all([listVideos(), listPlaylists()]);
-      setVideos(v);
-      setPlaylists(p);
-    } catch {}
-  }, []);
-
-  // Back (and Forward) bring the page back from history as it was when it was
-  // left, without asking the server: Next's router cache for the app's own
-  // links, the browser's back-forward cache for the rest. Either way it
-  // mounts again (or shows again), so that's when it catches up.
-  useEffect(() => {
-    const catchUp = () => {
-      void refresh();
-      void listJobs()
-        .then(setJobs)
-        .catch(() => {});
-    };
-    catchUp();
-    const onShow = (e: PageTransitionEvent) => e.persisted && catchUp();
-    window.addEventListener("pageshow", onShow);
-    return () => window.removeEventListener("pageshow", onShow);
-  }, [refresh]);
-
-  // While something downloads, follow it; when one finishes, its video joins the list.
-  const anyActive = jobs.some((j) => isActive(j));
-  useEffect(() => {
-    if (!anyActive) return;
-    let stop = false;
-    const tick = async () => {
-      try {
-        const next = await listJobs();
-        if (stop) return;
-        setJobs((prev) => {
-          const finished = next.some((j) => j.state === "done" && prev.find((p) => p.id === j.id)?.state !== "done");
-          if (finished) void refresh();
-          return next;
-        });
-      } catch {}
-    };
-    const timer = setInterval(tick, 1000);
-    return () => {
-      stop = true;
-      clearInterval(timer);
-    };
-  }, [anyActive, refresh]);
-
-  // Finished downloads leave the list a moment after their video arrives.
-  const doneIds = jobs
-    .filter((j) => j.state === "done")
-    .map((j) => j.id)
-    .join(",");
-  useEffect(() => {
-    if (!doneIds) return;
-    const ids = doneIds.split(",");
-    const timer = setTimeout(() => {
-      for (const id of ids) void dismiss(id).catch(() => {});
-      setJobs((prev) => prev.filter((j) => !ids.includes(j.id)));
-    }, 2500);
-    return () => clearTimeout(timer);
-  }, [doneIds]);
-
-  const say = (text: string, error = false) => setNotice({ text, error });
-
-  // A YouTube playlist, read whole above the library (a newer one replaces it).
-  const inspecting = useRef<AbortController | null>(null);
-  const openPlaylist = useCallback(async (listId: string) => {
-    inspecting.current?.abort();
-    const abort = new AbortController();
-    inspecting.current = abort;
-    setNotice(null);
-    setPreview({ listId, playlist: null });
-    try {
-      const playlist = await inspectPlaylist(listId, abort.signal);
-      setPreview({ listId, playlist });
-    } catch (err) {
-      if (abort.signal.aborted) return;
-      setPreview({ listId, playlist: null, error: errorMessage(err) });
-    }
-  }, []);
-  const closePreview = () => {
-    inspecting.current?.abort();
-    setPreview(null);
-  };
-
-  const addLink = useCallback(
-    async (text: string, replace = false) => {
-      const ytId = parseYoutube(text);
-      const listId = parsePlaylist(text);
-      if (!ytId) {
-        if (listId) {
-          void openPlaylist(listId);
-          return true;
-        }
-        say("That isn’t a YouTube link or video id.", true);
-        return false;
-      }
-      // A video inside a playlist: just the video, and a way to the rest.
-      const inList = listId ? { label: "Open the playlist", run: () => void openPlaylist(listId) } : undefined;
-      try {
-        const res = await requestYoutube(text, replace);
-        if (res.video) {
-          setNotice({ text: `“${res.video.title}” is already in the library.`, action: inList });
-        } else if (res.job) {
-          const job = res.job;
-          setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
-          setNotice(inList ? { text: "Downloading the video. It’s part of a playlist.", action: inList } : null);
-        }
-        return true;
-      } catch (err) {
-        say(errorMessage(err), true);
-        return false;
-      }
-    },
-    [openPlaylist],
-  );
-
-  const keepPlaylist = (p: Playlist) => setPlaylists((prev) => (prev.some((q) => q.id === p.id) ? prev.map((q) => (q.id === p.id ? p : q)) : [p, ...prev]));
-
-  const downloadAll = async () => {
-    if (!preview) return;
-    try {
-      const { playlist, jobs: queued } = await downloadPlaylist(preview.listId);
-      keepPlaylist(playlist);
-      setJobs((prev) => [...prev.filter((j) => !queued.some((q) => q.id === j.id)), ...queued]);
-      setPreview((p) => (p?.listId === preview.listId && p.playlist ? { ...p, playlist: { ...p.playlist, playlistId: playlist.id } } : p));
-      const n = queued.length;
-      setNotice({
-        text: n ? `Downloading ${n} ${n === 1 ? "video" : "videos"} into “${playlist.title}”.` : `“${playlist.title}” is in the library.`,
-        action: { label: "Open the playlist", run: () => router.push(`/p/${playlist.id}`) },
-      });
-    } catch (err) {
-      say(errorMessage(err), true);
-    }
-  };
-
-  const submitNewList = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const title = newList?.trim();
-    if (!title) return;
-    try {
-      keepPlaylist(await createPlaylist(title));
-      setNewList(null);
-    } catch (err) {
-      say(errorMessage(err), true);
-    }
-  };
-
-  // Anything that isn't a link is a YouTube search; a newer one replaces it.
-  const searching = useRef<AbortController | null>(null);
-  const runSearch = async (query: string) => {
-    searching.current?.abort();
-    const abort = new AbortController();
-    searching.current = abort;
-    setNotice(null);
-    setSearch({ query, results: null });
-    try {
-      const results = await searchYoutube(query, abort.signal);
-      setSearch({ query, results });
-    } catch (err) {
-      if (abort.signal.aborted) return;
-      setSearch({ query, results: null, error: errorMessage(err) });
-    }
-  };
-  const closeSearch = () => {
-    searching.current?.abort();
-    setSearch(null);
-  };
-
-  // A playlist link (with no video in it) opens the playlist rather than downloading.
-  const isPlaylistLink = parseYoutube(link) === null && parsePlaylist(link) !== null;
-  const isLink = !link.trim() || parseYoutube(link) !== null || isPlaylistLink;
-  const submitLink = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const text = link.trim();
-    if (!text) return;
-    if (!isLink) void runSearch(text);
-    else if (await addLink(text)) setLink("");
-  };
-
-  // Uploads go one after another: a phone's connection is better spent on one at a time.
-  const queue = useRef<Promise<void>>(Promise.resolve());
-  const addFiles = useCallback(
+  const yt = useYoutube({ keepJobs, keepPlaylist, say: setNotice });
+  const { addLink } = yt;
+  const up = useUploads({ onAdded: lib.keepVideo, onRefused: say });
+  const { addFiles } = up;
+  const onFiles = useCallback(
     (files: File[]) => {
-      const list = files.filter((f) => /^(video|audio)\//.test(f.type) || MEDIA_EXT.test(f.name));
-      if (!list.length) {
-        if (files.length) say("Those don’t look like videos or music.", true);
-        return;
-      }
-      setNotice(null);
-      for (const file of list) {
-        const up: Upload = { key: `${file.name}-${file.size}-${Math.random()}`, name: file.name, sent: 0, state: "waiting" };
-        setUploads((prev) => [...prev, up]);
-        const set = (patch: Partial<Upload>) => setUploads((prev) => prev.map((u) => (u.key === up.key ? { ...u, ...patch } : u)));
-        queue.current = queue.current.then(async () => {
-          set({ state: "sending" });
-          try {
-            const video = await uploadVideo(file, (sent) => set({ sent, state: sent >= 1 ? "processing" : "sending" }));
-            setVideos((prev) => [video, ...prev.filter((v) => v.id !== video.id)]);
-            setUploads((prev) => prev.filter((u) => u.key !== up.key));
-          } catch (err) {
-            set({ state: "failed", error: errorMessage(err, "Upload interrupted.") });
-          }
-        });
-      }
+      if (addFiles(files)) setNotice(null);
     },
-    [],
+    [addFiles],
   );
-
-  // Drop anywhere on the page.
-  useEffect(() => {
-    let depth = 0;
-    const hasFiles = (e: DragEvent) => e.dataTransfer?.types.includes("Files");
-    const enter = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      depth++;
-      setDragging(true);
-    };
-    const over = (e: DragEvent) => {
-      if (hasFiles(e)) e.preventDefault();
-    };
-    const leave = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      depth = Math.max(0, depth - 1);
-      if (!depth) setDragging(false);
-    };
-    const drop = (e: DragEvent) => {
-      if (!hasFiles(e)) return;
-      e.preventDefault();
-      depth = 0;
-      setDragging(false);
-      addFiles([...(e.dataTransfer?.files ?? [])]);
-    };
-    window.addEventListener("dragenter", enter);
-    window.addEventListener("dragover", over);
-    window.addEventListener("dragleave", leave);
-    window.addEventListener("drop", drop);
-    return () => {
-      window.removeEventListener("dragenter", enter);
-      window.removeEventListener("dragover", over);
-      window.removeEventListener("dragleave", leave);
-      window.removeEventListener("drop", drop);
-    };
-  }, [addFiles]);
-
-  // Paste a link anywhere (outside a text field): it's added straight away. Pasted files are uploaded.
-  useEffect(() => {
-    const paste = (e: ClipboardEvent) => {
-      const target = e.target as HTMLElement | null;
-      if (target?.closest("input, textarea, [contenteditable]")) return;
-      const files = [...(e.clipboardData?.files ?? [])];
-      if (files.length) {
-        e.preventDefault();
-        addFiles(files);
-        return;
-      }
-      const text = e.clipboardData?.getData("text") ?? "";
-      if (parseYoutube(text) || parsePlaylist(text)) {
-        e.preventDefault();
-        void addLink(text);
-      }
-    };
-    window.addEventListener("paste", paste);
-    return () => window.removeEventListener("paste", paste);
-  }, [addFiles, addLink]);
+  const onLink = useCallback((text: string) => void addLink(text), [addLink]);
+  const dragging = useDropAndPaste({ onFiles, onLink });
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -358,33 +80,21 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     };
   }, [jobs]);
 
-  const remove = (id: string) => setVideos((prev) => prev.filter((v) => v.id !== id));
-  const replace = (v: Video) => setVideos((prev) => prev.map((p) => (p.id === v.id ? v : p)));
-  const dismissJob = async (id: string) => {
-    setJobs((prev) => prev.filter((j) => j.id !== id));
-    await dismiss(id).catch(() => {});
-  };
-  const cancelJobs = async (list: Job[]) => {
-    const ids = new Set(list.map((j) => j.id));
-    setJobs((prev) => prev.filter((j) => !ids.has(j.id)));
-    await Promise.all(list.map((j) => dismiss(j.id).catch(() => {})));
-  };
-  const keepJob = (job: Job) => setJobs((prev) => [...prev.filter((j) => j.id !== job.id), job]);
   const retryJob = async (j: Job) => {
-    await dismissJob(j.id);
+    await lib.dismissJobs([j]);
     if (!j.torrent) {
       await addLink(j.url ?? "", true);
       return;
     }
     // The files already in skip themselves.
     try {
-      keepJob((await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job);
+      keepJobs([(await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job]);
     } catch (err) {
-      say(errorMessage(err), true);
+      say(errorMessage(err));
     }
   };
 
-  const pending = jobs.length + uploads.length;
+  const pending = jobs.length + up.uploads.length;
   const empty = videos.length === 0 && pending === 0 && playlists.length === 0;
 
   return (
@@ -403,42 +113,14 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       </Topbar>
 
       <main className="library">
-        <section className="add" aria-label="Add videos or music">
-          <form className="add-link" onSubmit={submitLink}>
-            {isPlaylistLink ? <IconPlaylist /> : isLink ? <IconLink /> : <IconSearch />}
-            <input
-              type="text"
-              placeholder="Paste a YouTube link, or search YouTube"
-              value={link}
-              onChange={(e) => setLink(e.target.value)}
-              aria-label="YouTube link or search"
-              autoComplete="off"
-              spellCheck={false}
-            />
-            <button type="submit" className="btn btn-primary" disabled={!link.trim()}>
-              {isPlaylistLink ? "Open" : isLink ? "Download" : "Search"}
-            </button>
-          </form>
-          <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
-            <IconUpload /> Add files
-          </button>
-          {transmission && (
-            <button type="button" className="btn" aria-pressed={torrents} onClick={() => setTorrents((on) => !on)}>
-              <IconDownload /> Transmission
-            </button>
-          )}
-          <input
-            ref={fileInput}
-            type="file"
-            accept="video/*,audio/*,.mkv,.m4v,.mov,.webm,.avi,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"
-            multiple
-            hidden
-            onChange={(e) => {
-              addFiles([...(e.target.files ?? [])]);
-              e.target.value = "";
-            }}
-          />
-        </section>
+        <AddBar
+          onLink={addLink}
+          onSearch={(q) => void yt.runSearch(q)}
+          onFiles={onFiles}
+          transmission={transmission}
+          torrents={torrents}
+          onTorrents={() => setTorrents((on) => !on)}
+        />
 
         {notice && (
           <Notice error={notice.error} onDismiss={() => setNotice(null)}>
@@ -451,27 +133,27 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           </Notice>
         )}
 
-        {torrents && <TransmissionPanel jobs={jobs} onJob={keepJob} onClose={() => setTorrents(false)} />}
+        {torrents && <TransmissionPanel jobs={jobs} onJob={(job) => keepJobs([job])} onClose={() => setTorrents(false)} />}
 
-        {preview && (
+        {yt.preview && (
           <PlaylistPreview
-            preview={preview}
+            preview={yt.preview}
             videos={videos}
             jobs={jobs}
-            onAdd={(ytId) => void addLink(ytId)}
-            onDownloadAll={downloadAll}
-            onClose={closePreview}
+            onAdd={onLink}
+            onDownloadAll={yt.downloadAll}
+            onClose={yt.closePreview}
           />
         )}
 
-        {search && (
+        {yt.search && (
           <SearchResults
-            search={search}
+            search={yt.search}
             videos={videos}
             jobs={jobs}
-            onAdd={(ytId) => void addLink(ytId)}
-            onOpenPlaylist={(listId) => void openPlaylist(listId)}
-            onClose={closeSearch}
+            onAdd={onLink}
+            onOpenPlaylist={(listId) => void yt.openPlaylist(listId)}
+            onClose={yt.closeSearch}
           />
         )}
 
@@ -488,46 +170,14 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           </section>
         ) : (
           <>
-            <section className="playlists" aria-label="Playlists">
-              <div className="shelf-head">
-                <h2 className="shelf-title">
-                  Playlists <span className="count">{playlists.length}</span>
-                </h2>
-                {newList === null ? (
-                  <button type="button" className="btn btn-small" onClick={() => setNewList("")}>
-                    <IconPlus /> New playlist
-                  </button>
-                ) : (
-                  <form className="new-playlist" onSubmit={submitNewList}>
-                    <input
-                      value={newList}
-                      onChange={(e) => setNewList(e.target.value)}
-                      onKeyDown={(e) => e.key === "Escape" && setNewList(null)}
-                      placeholder="Name"
-                      aria-label="New playlist name"
-                      autoFocus
-                    />
-                    <button type="submit" className="btn btn-primary btn-small" disabled={!newList.trim()}>
-                      Create
-                    </button>
-                    <button type="button" className="btn btn-quiet btn-small" onClick={() => setNewList(null)}>
-                      Cancel
-                    </button>
-                  </form>
-                )}
-              </div>
-              {shownPlaylists.length > 0 ? (
-                <ul className="grid">
-                  {shownPlaylists.map((p) => (
-                    <li key={p.id}>
-                      <PlaylistCard playlist={p} byId={byId} />
-                    </li>
-                  ))}
-                </ul>
-              ) : (
-                !query && <p className="playlists-hint">Make one here, or add videos to one from their ⋯ menu. A YouTube playlist link downloads a whole one.</p>
-              )}
-            </section>
+            <PlaylistShelf
+              playlists={shownPlaylists}
+              total={playlists.length}
+              byId={byId}
+              filtered={!!query}
+              onCreated={keepPlaylist}
+              onError={say}
+            />
 
             <div className="shelf-head">
               <h1 className="shelf-title">
@@ -548,27 +198,27 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
               </fieldset>
             </div>
             <ul className="grid">
-              {uploads.map((u) => (
+              {up.uploads.map((u) => (
                 <li key={u.key}>
-                  <UploadCard upload={u} onDismiss={() => setUploads((prev) => prev.filter((p) => p.key !== u.key))} />
+                  <UploadCard upload={u} onDismiss={() => up.dismiss(u.key)} />
                 </li>
               ))}
               {singleJobs.map((j) => (
                 <li key={j.id}>
-                  <JobCard job={j} onDismiss={() => dismissJob(j.id)} onRetry={() => retryJob(j)} />
+                  <JobCard job={j} onDismiss={() => lib.dismissJobs([j])} onRetry={() => retryJob(j)} />
                 </li>
               ))}
               {queuedLists.map(([pid, group]) => (
                 <li key={`queued-${pid}`}>
-                  <QueuedPlaylistCard title={playlists.find((p) => p.id === pid)?.title ?? "A playlist"} jobs={group} onCancel={() => cancelJobs(group)} />
+                  <QueuedPlaylistCard title={playlists.find((p) => p.id === pid)?.title ?? "A playlist"} jobs={group} onCancel={() => lib.dismissJobs(group)} />
                 </li>
               ))}
               {shown.map((v) => (
                 <li key={v.id}>
                   <VideoCard
                     video={v}
-                    onRemoved={remove}
-                    onChanged={replace}
+                    onRemoved={lib.dropVideo}
+                    onChanged={lib.keepVideo}
                     onRedownload={() => addLink(v.url ?? "", true)}
                     playlists={playlists}
                     onPlaylistChanged={keepPlaylist}
