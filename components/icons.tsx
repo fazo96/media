@@ -203,3 +203,21 @@ export const IconPrevious = (p: P) => (
     <path d="M15 5v10l-7.5-5zM5 5v10" />
   </svg>
 );
+
+export const IconGrid = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3.5" y="3.5" width="5" height="5" rx="1" />
+    <rect x="11.5" y="3.5" width="5" height="5" rx="1" />
+    <rect x="3.5" y="11.5" width="5" height="5" rx="1" />
+    <rect x="11.5" y="11.5" width="5" height="5" rx="1" />
+  </svg>
+);
+
+export const IconList = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M7.5 5.5h9M7.5 10h9M7.5 14.5h9" />
+    <circle cx="4" cy="5.5" r="0.9" fill="currentColor" stroke="none" />
+    <circle cx="4" cy="10" r="0.9" fill="currentColor" stroke="none" />
+    <circle cx="4" cy="14.5" r="0.9" fill="currentColor" stroke="none" />
+  </svg>
+);

@@ -228,3 +228,312 @@ fieldset.sorts {
   border: 0;
   min-width: 0;
 }
+
+/* ─── Views, and picking ─────────────────────────────────── */
+.shelf-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.shelf-tools .chip {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  gap: 4px;
+}
+
+.shelf-tools .chip svg {
+  width: 15px;
+  height: 15px;
+}
+
+fieldset.views {
+  display: flex;
+  flex-shrink: 0;
+  margin: 0;
+  padding: 2px;
+  border: 1px solid var(--rule);
+  border-radius: 999px;
+}
+
+.views .icon-btn {
+  width: 30px;
+  height: 26px;
+  border-radius: 999px;
+}
+
+.views .icon-btn svg {
+  width: 17px;
+  height: 17px;
+}
+
+.views .icon-btn[aria-pressed="true"] {
+  background: var(--ink);
+  color: var(--bg);
+}
+
+@media (max-width: 560px) {
+  .shelf-head {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}
+
+/* The uploads and downloads, above the list. */
+.grid-coming {
+  margin-bottom: 22px;
+}
+
+input.pick {
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+/* A card's box sits on its still. */
+.card > .pick {
+  position: absolute;
+  left: 8px;
+  top: 8px;
+  width: 22px;
+  height: 22px;
+}
+
+.card.is-picked .thumb {
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* Room under the last row for the selection's bar. */
+.library.is-picking {
+  padding-bottom: calc(110px + env(safe-area-inset-bottom));
+}
+
+/* ─── The list ───────────────────────────────────────────── */
+.list {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+
+.list th {
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--ink-faint);
+  font-size: var(--text-label);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-align: left;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.list td {
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--rule);
+  vertical-align: middle;
+}
+
+.list tbody tr:hover,
+.list tr.is-picked {
+  background: var(--accent-wash);
+}
+
+.list .list-pick {
+  width: 34px;
+  padding-right: 0;
+}
+
+.list-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.list-thumb {
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex-shrink: 0;
+  width: 64px;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-xs);
+  overflow: hidden;
+  background: var(--bg-sunk);
+  color: var(--ink-faint);
+}
+
+.list-thumb img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.list-thumb.is-music img {
+  object-fit: contain;
+}
+
+.list-thumb svg {
+  width: 20px;
+  height: 20px;
+}
+
+.list-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.list-name {
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+
+.list-name:hover {
+  color: var(--accent);
+}
+
+.list-warn {
+  display: inline-flex;
+  vertical-align: -3px;
+  margin-right: 4px;
+  color: var(--danger);
+}
+
+.list-warn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.list .confirm {
+  margin-top: 2px;
+}
+
+.list-sub {
+  display: none;
+  font-size: 12.5px;
+  color: var(--ink-soft);
+}
+
+.list-from,
+.list-added {
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.list td.list-from {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.list .list-num {
+  font: 500 13px var(--font-mono);
+  color: var(--ink-soft);
+  text-align: right;
+  white-space: nowrap;
+}
+
+.list th.list-num {
+  font: inherit;
+  font-size: var(--text-label);
+}
+
+.list .list-menu {
+  width: 46px;
+  padding: 0;
+}
+
+.list .card-actions {
+  padding-top: 0;
+}
+
+/* A tablet: the channel goes under the title. */
+@media (max-width: 860px) {
+  .list .list-from {
+    display: none;
+  }
+
+  .list-sub {
+    display: block;
+  }
+}
+
+/* A phone: the title and its length. */
+@media (max-width: 560px) {
+  .list .list-added,
+  .list .list-plays {
+    display: none;
+  }
+
+  .list-thumb {
+    width: 56px;
+  }
+}
+
+/* ─── The selection's bar ────────────────────────────────── */
+.selection {
+  position: fixed;
+  left: 50%;
+  bottom: calc(16px + env(safe-area-inset-bottom));
+  z-index: var(--z-bars);
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  width: max-content;
+  max-width: calc(100vw - 2 * var(--gutter));
+  padding: 8px 8px 8px 16px;
+  border: 1px solid var(--rule);
+  border-radius: 16px;
+  background: var(--bg-raised);
+  box-shadow: var(--shadow);
+  font-size: 14px;
+}
+
+.selection-count {
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.selection-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.selection-menu {
+  position: relative;
+}
+
+.selection .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* Above the bar, not below it. */
+.selection .menu {
+  top: auto;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: auto;
+}
+
+.selection .confirm {
+  margin-top: 0;
+}

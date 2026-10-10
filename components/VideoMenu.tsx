@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { Playlist, Video } from "@/lib/types";
 import { IconEdit, IconExternal, IconMore, IconPlaylist, IconRefresh, IconTrash } from "./icons";
 import PlaylistPicker from "./PlaylistPicker";
+import { useDismiss } from "./useDismiss";
 
 type Props = {
   video: Video;
@@ -20,20 +21,11 @@ export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRe
   // The menu, or its second page: the playlists.
   const [menu, setMenu] = useState<false | "main" | "playlists">(false);
   const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!menu) return;
-    const close = (e: Event) => {
-      if (!ref.current?.contains(e.target as Node)) setMenu(false);
-    };
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && setMenu(false);
-    document.addEventListener("pointerdown", close);
-    document.addEventListener("keydown", esc);
-    return () => {
-      document.removeEventListener("pointerdown", close);
-      document.removeEventListener("keydown", esc);
-    };
-  }, [menu]);
+  useDismiss(
+    ref,
+    menu !== false,
+    useCallback(() => setMenu(false), []),
+  );
 
   const pick = (fn: () => void) => () => {
     setMenu(false);
@@ -52,7 +44,7 @@ export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRe
       >
         <IconMore />
       </button>
-      {menu === "playlists" && <PlaylistPicker videoId={v.id} playlists={playlists} onChanged={onPlaylistChanged} onError={onError} />}
+      {menu === "playlists" && <PlaylistPicker videoIds={[v.id]} playlists={playlists} onChanged={onPlaylistChanged} onError={onError} />}
       {menu === "main" && (
         <div className="menu" role="menu">
           <button type="button" role="menuitem" onClick={pick(onRename)}>

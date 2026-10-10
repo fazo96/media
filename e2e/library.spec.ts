@@ -240,3 +240,61 @@ test("the tabs go from section to section, and say which is open", async ({ page
     if (heading) await expect(page.getByRole("heading", { level: 1 })).toContainText(heading);
   }
 });
+
+test("the list view is remembered, and picks a range into a new playlist", async ({ page, request }) => {
+  const base = unique("Listed");
+  const videos = [];
+  for (const n of [1, 2, 3]) videos.push(await upload(request, `${base} ${n}.mp4`));
+  await page.goto("/");
+  await page.getByRole("button", { name: "List", exact: true }).click();
+  await page.reload();
+  await expect(page.getByRole("button", { name: "List", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await page.getByLabel("Search the library").fill(base);
+  const rows = page.locator(".list tbody tr");
+  await expect(rows).toHaveCount(3);
+  await expect(rows.first()).toContainText("0:30");
+
+  // The first, then Shift and the last: all three.
+  await rows.nth(0).getByRole("checkbox").click();
+  await rows.nth(2).getByRole("checkbox").click({ modifiers: ["Shift"] });
+  const bar = page.getByRole("region", { name: "Selection" });
+  await expect(bar).toContainText("3 selected");
+  await expect(page.getByRole("checkbox", { name: "Select all" })).toBeChecked();
+
+  const title = unique("Bulk");
+  await bar.getByRole("button", { name: "Add to playlist…" }).click();
+  await bar.getByLabel("New playlist name").fill(title);
+  await bar.getByRole("button", { name: "Create and add" }).click();
+  await expect(bar.getByRole("menuitemcheckbox", { name: title })).toHaveAttribute("aria-checked", "true");
+  const p = ((await (await request.get("/api/playlists")).json()) as { title: string; items: string[] }[]).find((p) => p.title === title);
+  expect(p?.items.sort()).toEqual(videos.map((v) => v.id).sort());
+
+  // Escape closes the menu, then clears the selection.
+  await page.keyboard.press("Escape");
+  await expect(bar.getByRole("menu")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  await expect(bar).toHaveCount(0);
+});
+
+test("the grid's Select picks cards instead of playing them, and deletes them together", async ({ page, request }) => {
+  const base = unique("Picked");
+  const a = await upload(request, `${base} a.mp4`);
+  const b = await upload(request, `${base} b.mp4`);
+  await page.goto("/");
+  await page.getByLabel("Search the library").fill(base);
+  await expect(page.locator(".grid > li")).toHaveCount(2);
+  await page.getByRole("button", { name: "Select", exact: true }).click();
+  await page.locator(`[data-video="${a.id}"] a.thumb`).click();
+  await expect(page).toHaveURL("/");
+  const bar = page.getByRole("region", { name: "Selection" });
+  await expect(bar).toContainText("1 selected");
+  await bar.getByRole("button", { name: "Select all 2" }).click();
+  await expect(bar).toContainText("2 selected");
+  await expect(page.getByRole("checkbox", { name: `Select ${b.title}` })).toBeChecked();
+
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(bar).toContainText("Move 2 to the trash?");
+  await bar.getByRole("button", { name: "Delete" }).click();
+  await expect(page.locator(".grid > li")).toHaveCount(0);
+  for (const v of [a, b]) expect((await request.get(`/api/videos/${v.id}`)).status()).toBe(404);
+});

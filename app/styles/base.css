@@ -112,6 +112,16 @@ input {
   outline-offset: 2px;
 }
 
+/* Read out, not shown. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
 /* The small uppercase labels set in the mono face. */
 .label {
   font: 500 var(--text-label) / 1.2 var(--font-mono);
