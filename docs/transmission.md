@@ -20,14 +20,16 @@ Transmission's classic JSON protocol (`{ method, arguments }`, `result: "success
 
 ## An import
 
-`POST /api/transmission { hash, files, remove }` (`importTorrent()`) checks with Transmission that each file is one of the torrent's videos and finished (else 400; 404 when the torrent is gone; 409 while the same torrent is importing already) and queues a job. Jobs are the same `Job` as YouTube's (`kind: "torrent"`, in `lib/downloads.ts`'s list, so `GET /api/jobs` and the page's cards show them and `DELETE /api/jobs/<jid>` cancels them), but run in a queue of their own, one at a time, so a big copy doesn't hold up downloads.
+`POST /api/transmission { hash, files, remove, playlist }` (`importTorrent()`) checks with Transmission that each file is one of the torrent's videos and finished (else 400; 404 when the torrent is gone; 409 while the same torrent is importing already) and queues a job. Jobs are the same `Job` as YouTube's (`kind: "torrent"`, in `lib/downloads.ts`'s list, so `GET /api/jobs` and the page's cards show them and `DELETE /api/jobs/<jid>` cancels them), but run in a queue of their own, one at a time, so a big copy doesn't hold up downloads.
+
+With `playlist` (Import all), before the first file it finds the [playlist](library.md#playlists) made from this torrent before (by `torrentHash`) or makes one, titled with the torrent's name spaced out like a file's (`Show.S01.1080p` → `Show S01 1080p`, nothing taken off), and puts in it the torrent's videos already in the library, by name with numbers in order. The job's `playlistId` is that playlist.
 
 For each file, in the order asked:
 
-1. A file whose video is in the library already is skipped (so a retry after a later file failed doesn't import the first ones twice).
+1. A file whose video is in the library already is skipped (so a retry after a later file failed doesn't import the first ones twice), but still goes in the playlist.
 2. Its path is Transmission's `downloadDir` + its name, mapped by `MEDIA_TRANSMISSION_PATHS`; missing there, the job fails saying so.
 3. It's **copied** to `.incoming/` (the job's progress is bytes copied out of all of them, with speed and time left), and the copy's size checked against the torrent's.
-4. Then `addVideo()`, like a dropped file ([library](library.md#adding-a-video)): probe, remux, thumbnail. The title is the file name without its extension, with dots and underscores turned into spaces when it has no spaces. `source: "torrent"`, `torrentHash`, `torrentName`, and `originalName` its path in the torrent.
+4. Then `addVideo()`, like a dropped file ([library](library.md#adding-a-video)): probe, remux, thumbnail. The title is the file name without its extension, with dots and underscores turned into spaces when it has no spaces. `source: "torrent"`, `torrentHash`, `torrentName`, and `originalName` its path in the torrent. Then, with `playlist`, it goes at the end of the playlist, so a failure or cancel halfway leaves a playlist of what got in, and a retry (which asks for the playlist again) adds to the same one. Deleting the playlist and importing again makes a new one.
 
 Only when every file is in (and the job wasn't cancelled) does `remove` call `torrent-remove`. A failure or a cancel leaves the torrent and its files where they were.
 
@@ -35,4 +37,4 @@ It's a copy, not a move or a link, so nothing is lost if something goes wrong be
 
 ## The page
 
-**Transmission** beside Add files, when set up, opens `components/TransmissionPanel.tsx` above the library: a filter, **Then delete the torrent and its files from Transmission** (on by default, remembered per device in localStorage `media:transmission-remove`), and each torrent with its videos: size, then **Import**, how far along an unfinished one is, or **In the library** (a link to it). **Import all (N)** takes every finished one not in the library yet. Transmission can only remove a torrent whole, so when deleting is on and the torrent has other videos that aren't in the library, it asks first, inline ("Import and delete"). The panel reads Transmission again when an import starts or ends, and with its refresh button.
+**Transmission** beside Add files, when set up, opens `components/TransmissionPanel.tsx` above the library: a filter, **Then delete the torrent and its files from Transmission** (on by default, remembered per device in localStorage `media:transmission-remove`), and each torrent with its videos: size, then **Import**, how far along an unfinished one is, or **In the library** (a link to it). **Import all (N)** takes every finished one not in the library yet and makes a playlist of the torrent's videos (`playlist: true`; a single **Import** doesn't). Transmission can only remove a torrent whole, so when deleting is on and the torrent has other videos that aren't in the library, it asks first, inline ("Import and delete"). The panel reads Transmission again when an import starts or ends, and with its refresh button.

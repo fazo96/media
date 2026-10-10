@@ -58,4 +58,9 @@ test("deleting a torrent with other videos asks first; without deleting, it stay
   await expect(series.getByRole("link", { name: "In the library" })).toHaveCount(2, { timeout: 30_000 });
   await expect(page.locator(".card", { hasText: "Episode 2" }).locator("a.thumb")).toBeVisible();
   expect((await stub("stub-removed")).removed).toEqual([]);
+
+  // Import all made a playlist of them, named after the torrent, in order.
+  await page.getByRole("link", { name: "Open the playlist Stub Series" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Stub Series" })).toBeVisible();
+  await expect(page.locator(".pl-item .other-title")).toHaveText(["Episode 1", "Episode 2"]);
 });

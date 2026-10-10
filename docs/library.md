@@ -39,7 +39,7 @@ An id names a folder, so `isValidId` (`lib/ids.ts`: `[a-z0-9][a-z0-9_-]{0,79}`) 
 
 `lib/playlists.ts`. A playlist is a JSON file listing video ids in order; a video can be in any number of them. Its id is a slug of its title, claimed like a dropped file's (`createExclusive`, then `-2`, `-3`…); renaming keeps it. `updatePlaylist()` serializes changes to one file (`serially` in `lib/files.ts`, which `updateVideo()` uses too) and keeps one of each id.
 
-Items aren't checked against the library: a whole YouTube playlist's ids are known before its videos download (see [downloads](downloads.md#playlists)), and deleting a video leaves its id behind. The pages show those as "not downloaded" (a YouTube one, with a retry) or "deleted", and skip them when playing. Deleting a playlist moves its file to the trash; its videos stay.
+A torrent's Import all makes one too, marked with its `torrentHash` ([transmission](transmission.md#an-import)). Items aren't checked against the library: a whole YouTube playlist's ids are known before its videos download (see [downloads](downloads.md#playlists)), and deleting a video leaves its id behind. The pages show those as "not downloaded" (a YouTube one, with a retry) or "deleted", and skip them when playing. Deleting a playlist moves its file to the trash; its videos stay.
 
 ## Browse
 

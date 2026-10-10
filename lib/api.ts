@@ -115,5 +115,5 @@ export const shareUrl = (s: Share) => `${location.origin}/s/${s.token}`;
 export const listTorrents = () => api<{ torrents: Torrent[] }>("/api/transmission");
 
 /** Import a torrent's finished videos (`files`: indexes), then maybe remove it from Transmission. */
-export const importTorrent = (hash: string, files: number[], remove: boolean) =>
-  api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove } });
+export const importTorrent = (hash: string, files: number[], remove: boolean, playlist = false) =>
+  api<{ job: Job }>("/api/transmission", { method: "POST", json: { hash, files, remove, playlist } });

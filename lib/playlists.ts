@@ -41,7 +41,12 @@ export async function findYoutubePlaylist(listId: string): Promise<Playlist | nu
   return (await listPlaylists()).find((p) => p.youtubePlaylistId === listId) ?? null;
 }
 
-type New = Pick<Playlist, "title"> & Partial<Pick<Playlist, "youtubePlaylistId" | "url" | "channel" | "items">>;
+/** The playlist made from this torrent's Import all, if there is one. */
+export async function findTorrentPlaylist(hash: string): Promise<Playlist | null> {
+  return (await listPlaylists()).find((p) => p.torrentHash === hash) ?? null;
+}
+
+type New = Pick<Playlist, "title"> & Partial<Pick<Playlist, "youtubePlaylistId" | "torrentHash" | "url" | "channel" | "items">>;
 
 /** A new playlist, under a slug of its title (then title-2, title-3…). */
 export async function createPlaylist(details: New): Promise<Playlist> {

@@ -29,7 +29,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
   const [remove, setRemove] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   // An import that would delete videos not in the library, waiting for a yes.
-  const [confirming, setConfirming] = useState<{ hash: string; files: TorrentFile[]; left: number } | null>(null);
+  const [confirming, setConfirming] = useState<{ hash: string; files: TorrentFile[]; all: boolean; left: number } | null>(null);
 
   useEffect(() => setRemove(local.get(REMOVE_KEY) !== "0"), []);
   const pickRemove = (on: boolean) => {
@@ -59,13 +59,14 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
     return torrents.filter((t) => `${t.name} ${t.files.map((f) => f.name).join(" ")}`.toLowerCase().includes(q));
   }, [torrents, filter]);
 
-  const start = async (t: Torrent, files: TorrentFile[], confirmed = false) => {
+  // `all`: Import all, which also makes a playlist of the torrent's videos.
+  const start = async (t: Torrent, files: TorrentFile[], all: boolean, confirmed = false) => {
     if (remove && !confirmed) {
       // Transmission removes a torrent whole: say what else goes with it first.
       const chosen = new Set(files.map((f) => f.index));
       const left = t.files.filter((f) => !chosen.has(f.index) && !f.videoId).length;
       if (left > 0) {
-        setConfirming({ hash: t.hash, files, left });
+        setConfirming({ hash: t.hash, files, all, left });
         return;
       }
     }
@@ -76,6 +77,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
         t.hash,
         files.map((f) => f.index),
         remove,
+        all,
       );
       onJob(job);
       setError(null);
@@ -138,7 +140,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
                     <p className="card-meta">{meta}</p>
                   </div>
                   {ready.length > 1 && (
-                    <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, ready)}>
+                    <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, ready, true)}>
                       Import all ({ready.length})
                     </button>
                   )}
@@ -149,7 +151,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
                       Deleting the torrent also deletes {confirming.left} other {confirming.left === 1 ? "video" : "videos"} in it that{" "}
                       {confirming.left === 1 ? "isn’t" : "aren’t"} in the library.
                     </span>
-                    <button type="button" className="btn btn-danger btn-small" onClick={() => void start(t, confirming.files, true)}>
+                    <button type="button" className="btn btn-danger btn-small" onClick={() => void start(t, confirming.files, confirming.all, true)}>
                       Import and delete
                     </button>
                     <button type="button" className="btn btn-quiet btn-small" onClick={() => setConfirming(null)}>
@@ -171,7 +173,7 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
                       ) : f.done < 1 ? (
                         <span className="torrent-file-state">{percent(f.done)}</span>
                       ) : (
-                        <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, [f])}>
+                        <button type="button" className="btn btn-small" disabled={disabled} onClick={() => void start(t, [f], false)}>
                           Import
                         </button>
                       )}

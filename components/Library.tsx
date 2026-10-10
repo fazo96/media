@@ -382,7 +382,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     }
     // The files already in skip themselves.
     try {
-      keepJob((await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove)).job);
+      keepJob((await importTorrent(j.torrent.hash, j.torrent.files, j.torrent.remove, j.torrent.playlist)).job);
     } catch (err) {
       say(err instanceof ApiError ? err.message : "Can’t reach the server.", true);
     }

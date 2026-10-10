@@ -7,7 +7,8 @@ import { startStub } from "../e2e/stub-transmission.mjs";
 import { getJob, isActive } from "../lib/downloads.ts";
 import { getVideo } from "../lib/library.ts";
 import { INCOMING_DIR, MEDIA_DIR } from "../lib/paths.ts";
-import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
+import { getPlaylist } from "../lib/playlists.ts";
+import { ImportError, importTorrent, listTorrents, mapPath, parsePathMap, playlistTitleOf, type RawTorrent, titleOf, toTorrents } from "../lib/transmission.ts";
 import type { Job, Video } from "../lib/types.ts";
 
 // Real ffmpeg (an import goes through addVideo): in `nix develop` it's on PATH; elsewhere those skip.
@@ -33,6 +34,11 @@ test("parsePathMap and mapPath swap Transmission's folders for ours", () => {
   assert.equal(mapPath("/downloadsX/b.mkv", map), "/downloadsX/b.mkv");
   assert.equal(mapPath("/elsewhere/b.mkv", map), "/elsewhere/b.mkv");
   assert.deepEqual(parsePathMap(undefined), []);
+});
+
+test("playlistTitleOf spaces out a torrent's name, keeping all of it", () => {
+  assert.equal(playlistTitleOf("Show.S01.1080p.WEB"), "Show S01 1080p WEB");
+  assert.equal(playlistTitleOf("Stub Series"), "Stub Series");
 });
 
 test("titleOf spaces out dotted names", () => {
@@ -139,6 +145,7 @@ test("an import copies the files in and leaves the torrent", { skip: !ffmpeg }, 
   const job = await finish(await importTorrent(B, [1, 0], false));
   assert.equal(job.state, "done", job.error ?? "");
   assert.deepEqual(job.torrent?.files, [1, 0]); // in the order asked for
+  assert.equal(job.playlistId, undefined);
   const v = (await getVideo(job.videoId as string)) as Video;
   assert.equal(v.title, "Episode 2");
   assert.equal(v.source, "torrent");
@@ -152,10 +159,15 @@ test("an import copies the files in and leaves the torrent", { skip: !ffmpeg }, 
   const listed = (await listTorrents()).find((t) => t.hash === B);
   assert.ok(listed?.files[0].videoId && listed.files[1].videoId);
 
-  // Again: the files already in are skipped, and now the torrent goes.
-  const again = await finish(await importTorrent(B, [1, 0], true));
+  // Again, as Import all: the files already in are skipped but go in its
+  // playlist (by name), and now the torrent goes.
+  const again = await finish(await importTorrent(B, [1, 0], true, true));
   assert.equal(again.state, "done", again.error ?? "");
   assert.equal(again.videoId, job.videoId);
+  const playlist = await getPlaylist(again.playlistId as string);
+  assert.equal(playlist?.title, "Stub Series");
+  assert.equal(playlist?.torrentHash, B);
+  assert.deepEqual(playlist?.items, [listed?.files[0].videoId, listed?.files[1].videoId]);
   assert.deepEqual((await rpc("stub-removed")).removed, [{ hash: B, deleteLocalData: true }]);
   await assert.rejects(access(path.join(root, "complete/Stub Series")));
 });

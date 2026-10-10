@@ -107,6 +107,8 @@ export type Playlist = {
   youtubePlaylistId?: string;
   url?: string;
   channel?: string;
+  /** Set when it came from a torrent's Import all: the torrent's hash. */
+  torrentHash?: string;
   /** Video ids, in order. Some may not be in the library: downloading, failed, or deleted since. */
   items: string[];
   createdAt: number;
@@ -174,6 +176,8 @@ export type TorrentImport = {
   /** File indexes, in the order they're imported. */
   files: number[];
   remove: boolean;
+  /** Put them in a playlist named after the torrent (Import all). */
+  playlist?: boolean;
   /** Which of `files` is being worked on (an index into it). */
   current: number;
 };

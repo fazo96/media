@@ -7,6 +7,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { abortOf, addJob, isActive, jobEnded, listJobs } from "./downloads";
 import { addVideo, incomingDir, listVideos } from "./library";
+import { createPlaylist, findTorrentPlaylist, updatePlaylist } from "./playlists";
 import type { Job, Torrent, TorrentFile, TorrentImport, Video } from "./types";
 
 // Importing from Transmission (docs/transmission.md): its RPC lists the
@@ -64,11 +65,14 @@ export function mapPath(p: string, map: [string, string][]): string {
   return p;
 }
 
+/** `Some.Movie.2006` spaced out; a name with spaces already as it is. */
+const spaced = (name: string) => (name.includes(" ") ? name : name.replace(/[._]+/g, " ")).trim() || "Untitled";
+
 /** A title from a file's name: without its folder and extension, and `Some.Movie.2006` spaced out. */
-export function titleOf(name: string): string {
-  const base = path.posix.basename(name, path.posix.extname(name));
-  return (base.includes(" ") ? base : base.replace(/[._]+/g, " ")).trim() || "Untitled";
-}
+export const titleOf = (name: string) => spaced(path.posix.basename(name, path.posix.extname(name)));
+
+/** A playlist's title from a torrent's name: spaced out, but nothing taken off (`Show.S01.1080p` has no extension). */
+export const playlistTitleOf = (name: string) => spaced(name);
 
 type State = { sessionId: string; running: boolean };
 
@@ -185,9 +189,11 @@ const finished = (f: RawTorrent["files"][number]) => f.bytesCompleted >= f.lengt
 
 /**
  * Queue an import of a torrent's finished video files (by index). `remove`:
- * then remove the torrent and its data from Transmission, once all of them are in.
+ * then remove the torrent and its data from Transmission, once all of them are
+ * in. `playlist`: put them (and the torrent's videos in the library already)
+ * in a playlist named after the torrent, the one made before if there is one.
  */
-export async function importTorrent(hash: string, indexes: number[], remove: boolean): Promise<Job> {
+export async function importTorrent(hash: string, indexes: number[], remove: boolean, playlist = false): Promise<Job> {
   if (listJobs().some((j) => j.torrent?.hash === hash && isActive(j))) throw new ImportError(409, "That torrent is being imported already.");
   const t = await getTorrent(hash);
   if (!t) throw new ImportError(404, "That torrent isn’t in Transmission any more.");
@@ -200,7 +206,7 @@ export async function importTorrent(hash: string, indexes: number[], remove: boo
   const job: Job = {
     id: randomBytes(8).toString("hex"),
     kind: "torrent",
-    torrent: { hash, files, remove, current: 0 },
+    torrent: { hash, files, remove, playlist, current: 0 },
     title: t.name,
     state: "queued",
     progress: null,
@@ -234,6 +240,26 @@ async function copy(from: string, to: string, signal: AbortSignal, onBytes: (n: 
   await pipeline(createReadStream(from, { highWaterMark: 1 << 20 }), count, createWriteStream(to), { signal });
 }
 
+/**
+ * The playlist for a torrent's Import all: the one made before, or a new one
+ * named after the torrent, with the torrent's videos already in the library (by
+ * name, numbers in order). Sets the job's `playlistId`; answers how to add one more.
+ */
+async function torrentPlaylist(job: Job, t: RawTorrent, videos: Video[]): Promise<(id: string) => Promise<void>> {
+  const items = videos
+    .filter((v) => v.torrentHash === t.hashString)
+    .sort((a, b) => (a.originalName ?? "").localeCompare(b.originalName ?? "", undefined, { numeric: true, sensitivity: "base" }))
+    .map((v) => v.id);
+  const found = await findTorrentPlaylist(t.hashString);
+  const playlist =
+    (found && (await updatePlaylist(found.id, (p) => ({ ...p, items: [...p.items, ...items] })))) ??
+    (await createPlaylist({ title: playlistTitleOf(t.name), torrentHash: t.hashString, items }));
+  job.playlistId = playlist.id;
+  return async (id) => {
+    await updatePlaylist(playlist.id, (p) => ({ ...p, items: [...p.items, id] }));
+  };
+}
+
 async function run(job: Job) {
   const imp = job.torrent as TorrentImport;
   const signal = (abortOf(job) ?? new AbortController()).signal;
@@ -245,6 +271,8 @@ async function run(job: Job) {
     const videos = await listVideos();
     // A file imported before (by a try that failed on a later one) counts as in.
     const inLibrary = (name: string) => videos.find((v) => v.torrentHash === imp.hash && v.originalName === name);
+    // Import all's playlist: made (or found) first, so a failure halfway leaves what got in.
+    const addToPlaylist = imp.playlist ? await torrentPlaylist(job, t, videos) : async () => {};
     const total = imp.files.reduce((sum, i) => sum + (t.files[i] && !inLibrary(t.files[i].name) ? t.files[i].length : 0), 0);
     let copied = 0;
     const started = Date.now();
@@ -258,6 +286,7 @@ async function run(job: Job) {
       const had = inLibrary(f.name);
       if (had) {
         job.videoId ??= had.id;
+        await addToPlaylist(had.id);
         continue;
       }
       const from = mapPath(path.posix.join(t.downloadDir, f.name), map);
@@ -284,6 +313,7 @@ async function run(job: Job) {
         job.state = "processing";
         const v = await addVideo(file, { title: titleOf(f.name), source: "torrent", originalName: f.name, torrentHash: imp.hash, torrentName: t.name });
         job.videoId ??= v.id;
+        await addToPlaylist(v.id);
       } catch (err) {
         await rm(dir, { recursive: true, force: true });
         if (signal.aborted) throw err;
