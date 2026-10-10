@@ -72,9 +72,28 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists }
 
   const refresh = useCallback(async () => {
     try {
-      setVideos(await api<Video[]>("/api/videos"));
+      const [v, p] = await Promise.all([api<Video[]>("/api/videos"), api<Playlist[]>("/api/playlists")]);
+      setVideos(v);
+      setPlaylists(p);
     } catch {}
   }, []);
+
+  // Back (and Forward) bring the page back from history as it was when it was
+  // left, without asking the server: Next's router cache for the app's own
+  // links, the browser's back-forward cache for the rest. Either way it
+  // mounts again (or shows again), so that's when it catches up.
+  useEffect(() => {
+    const catchUp = () => {
+      void refresh();
+      void api<Job[]>("/api/jobs")
+        .then(setJobs)
+        .catch(() => {});
+    };
+    catchUp();
+    const onShow = (e: PageTransitionEvent) => e.persisted && catchUp();
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, [refresh]);
 
   // While something downloads, follow it; when one finishes, its video joins the list.
   const anyActive = jobs.some((j) => ACTIVE.has(j.state));

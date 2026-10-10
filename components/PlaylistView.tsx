@@ -32,6 +32,26 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const present = p.items.flatMap((id) => byId.get(id) ?? []);
   const jobFor = (ytId: string | null) => (ytId ? jobs.find((j) => j.youtubeId === ytId && (ACTIVE.has(j.state) || j.state === "failed")) : undefined);
 
+  // Back from the player brings this page back as it was left (see Library):
+  // catch up when it mounts or shows again. Gone meanwhile: to the library.
+  useEffect(() => {
+    const catchUp = async () => {
+      try {
+        const jobsNow = await api<Job[]>("/api/jobs");
+        const [list, all] = await Promise.all([api<Playlist>(`/api/playlists/${initialPlaylist.id}`), api<Video[]>("/api/videos")]);
+        setJobs(jobsNow);
+        setP(list);
+        setVideos(all);
+      } catch (err) {
+        if (err instanceof ApiError && err.status === 404) router.replace("/");
+      }
+    };
+    void catchUp();
+    const onShow = (e: PageTransitionEvent) => e.persisted && void catchUp();
+    window.addEventListener("pageshow", onShow);
+    return () => window.removeEventListener("pageshow", onShow);
+  }, [initialPlaylist.id, router]);
+
   // While any of its videos downloads, follow along; one that lands joins the list.
   const following = p.items.some((id) => {
     const j = jobFor(youtubeIdFromVideoId(id));

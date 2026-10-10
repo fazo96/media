@@ -171,3 +171,25 @@ test("make a playlist, add a video from its card, and trim, rename and delete it
   // The video stays.
   expect((await request.get(`/api/videos/${v.id}`)).status()).toBe(200);
 });
+
+test("back from a video, the library shows what changed while it was open", async ({ page, request }) => {
+  const v = await upload(request, `${unique("Backed")}.mp4`);
+  const name = unique("Made before leaving");
+  await page.goto("/");
+  await page.getByRole("button", { name: "New playlist" }).click();
+  await page.getByLabel("New playlist name").fill(name);
+  await page.getByRole("button", { name: "Create", exact: true }).click();
+  await expect(page.locator(".playlists .card", { hasText: name })).toBeVisible();
+
+  await page.locator(`[data-video="${v.id}"] a.thumb`).click();
+  await expect(page).toHaveURL(/\/v\//);
+  // Changed elsewhere meanwhile: renamed.
+  await request.patch(`/api/videos/${v.id}`, { data: { title: `${v.title} elsewhere` } });
+  // Back restores the page from history, as it was when it was left.
+  await page.goBack();
+  await expect(page.locator(".playlists .card", { hasText: name })).toBeVisible();
+  await expect(page.locator(`[data-video="${v.id}"] .card-title`)).toHaveText(`${v.title} elsewhere`);
+  await page.locator(`[data-video="${v.id}"]`).getByRole("button", { name: /^More for/ }).click();
+  await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
+  await expect(page.getByRole("menuitemcheckbox", { name })).toBeVisible();
+});
