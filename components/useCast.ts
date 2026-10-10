@@ -131,6 +131,10 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
   // Read when they're needed, so the effect below doesn't start over for each render.
   const handlers = useRef({ getLocal, onEnded, onCasting });
   handlers.current = { getLocal, onEnded, onCasting };
+  // The video's details too: renaming it (say) mustn't start casting it over.
+  const latest = useRef(v);
+  latest.current = v;
+  const id = v.id;
 
   useEffect(() => {
     let gone = false;
@@ -141,6 +145,7 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
 
     /** Play this video (or in listen mode its audio) on the session's device, unless it already is (a reload while casting). */
     const play = async (session: CastSession, s: NonNullable<typeof sdk.current>) => {
+      const v = latest.current;
       const local = handlers.current.getLocal();
       const from = local && local.readyState >= 1 ? local.currentTime : v.position;
       casting.current = true;
@@ -149,7 +154,7 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
       setDevice(session.getCastDevice().friendlyName);
       setError(null);
       try {
-        const share = await castShare(v.id);
+        const share = await castShare(id);
         if (gone) return;
         const base = `${location.origin}/api/s/${share.token}`;
         const url = listen ? `${base}/audio` : `${base}/file`;
@@ -204,7 +209,7 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
         remoteTime = player.currentTime;
         if (Date.now() - lastSave >= SAVE_EVERY_MS) {
           lastSave = Date.now();
-          void saveProgress(v.id, { position: remoteTime });
+          void saveProgress(id, { position: remoteTime });
         }
       };
       const onState = () => {
@@ -213,7 +218,7 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
         if (!casting.current || finished || player.playerState !== "IDLE") return;
         if (player.duration && remoteTime >= player.duration - 2) {
           finished = true;
-          void saveProgress(v.id, { position: 0, ended: true });
+          void saveProgress(id, { position: 0, ended: true });
           handlers.current.onEnded();
         }
       };
@@ -256,9 +261,9 @@ export function useCast({ video: v, local: getLocal, listen, casting, onEnded, o
       off();
       // Leaving while the TV plays: it keeps playing, and the next page (if it's a player) takes over.
       // `casting` stays set, so the page's own last save (of its stale place) doesn't follow this one.
-      if (casting.current && remoteTime >= 0 && !finished) void saveProgress(v.id, { position: remoteTime }, true);
+      if (casting.current && remoteTime >= 0 && !finished) void saveProgress(id, { position: remoteTime }, true);
     };
-  }, [v.id, v.mime, v.audioCodec, v.videoCodec, v.title, v.channel, v.hasThumb, v.position, listen, casting]);
+  }, [id, listen, casting]);
 
   const toggle = useCallback(() => {
     const s = sdk.current;

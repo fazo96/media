@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, type RefObject, useCallback, useContext, useEffect, useRef, useState } from "react";
-import type { Video } from "@/lib/types";
+import { neighbours, type Video } from "@/lib/types";
 import { thumbUrl } from "@/lib/urls";
 import { type Start, usePlayback } from "./usePlayback";
 import { useMediaSession } from "./useMediaSession";
@@ -68,9 +68,7 @@ export function NowPlayingProvider({ children }: { children: React.ReactNode }) 
 
   const track = loaded?.track ?? null;
   const queue = loaded?.queue ?? null;
-  const index = track && queue ? queue.videos.findIndex((o) => o.id === track.id) : -1;
-  const after = index >= 0 ? queue?.videos[index + 1] : undefined;
-  const before = index > 0 ? queue?.videos[index - 1] : undefined;
+  const { previous: before, next: after } = track && queue ? neighbours(queue.videos, track.id) : {};
 
   const go = useCallback((v: Video, q: Queue | null, s: Start) => {
     start.current = s;

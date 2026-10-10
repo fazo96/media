@@ -50,7 +50,13 @@ export const listenMime = (v: Pick<Video, "videoCodec" | "mime" | "audioCodec">)
 /** A playlist's videos that are in the library (`byId`), in order. */
 export const inLibrary = <V extends { id: string }>(items: string[], byId: Map<string, V>): V[] => items.flatMap((id) => byId.get(id) ?? []);
 
-export type JobState = "queued" | "downloading" | "processing" | "done" | "failed";
+/** Where `id` is in `list`, and the ones either side of it (none at either end, or when it isn't there). */
+export function neighbours<V extends { id: string }>(list: V[], id: string): { index: number; previous?: V; next?: V } {
+  const index = list.findIndex((o) => o.id === id);
+  return index < 0 ? { index } : { index, previous: list[index - 1], next: list[index + 1] };
+}
+
+export type JobState ="queued" | "downloading" | "processing" | "done" | "failed";
 
 /** Queued or under way. */
 export const isActive = (j: Pick<Job, "state">) => j.state === "queued" || j.state === "downloading" || j.state === "processing";
