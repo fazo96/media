@@ -11,6 +11,11 @@ test("upload, read, seek, rename, track and delete a video", async ({ request })
   const list = await (await request.get("/api/videos")).json();
   expect(list.map((x: { id: string }) => x.id)).toContain(v.id);
 
+  // The library's size counts it, beside the disk's.
+  const disk = await (await request.get("/api/storage")).json();
+  expect(disk.library).toBeGreaterThan(0);
+  expect(disk.total).toBeGreaterThan(disk.free);
+
   const range = await request.get(`/api/videos/${v.id}/file`, { headers: { Range: "bytes=10-19" } });
   expect(range.status()).toBe(206);
   expect(range.headers()["content-range"]).toMatch(/^bytes 10-19\/\d+$/);

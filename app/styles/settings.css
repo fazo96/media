@@ -167,3 +167,26 @@
   margin: 0 0 20px;
   color: var(--ink-soft);
 }
+
+.storage-section .storage-bar {
+  height: 10px;
+  border-radius: 5px;
+  margin: 4px 0 14px;
+}
+
+.storage-figures {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 6px 16px;
+  margin: 0;
+  font-size: 14px;
+}
+
+.storage-figures dt {
+  color: var(--ink-soft);
+}
+
+.storage-figures dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}

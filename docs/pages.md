@@ -13,6 +13,8 @@ Server-rendered with every video, playlist and the current downloads, then kept 
 
 **Playlists** have a shelf above the videos (`components/PlaylistCard.tsx`: up to four stills, how many are in the library) and a **New playlist** button. A video joins or leaves one from its card's `⋯` menu, **Add to playlist…** (`components/PlaylistPicker.tsx`: each playlist ticks on and off, and a name field makes a new one with the video in it).
 
+The topbar's **storage meter** (`components/StorageMeter.tsx`) is a bar of the library's disk (the library and its trash in the accent color, everything else on the disk grey, then what's free) and "312 GB · 1.1 TB free", hidden under 720px wide; its tooltip has the trash and the disk's size, and it links to Settings' Storage. The page brings the numbers ([library](library.md#disk-usage)); it asks `GET /api/storage` again when the videos change (one added or deleted). Under 5% free it turns red.
+
 Sorting (recently watched, most watched, recently added, A–Z) is remembered per device (localStorage `media:sort`). "Recently watched" puts never-watched videos at the time they were added. Search filters videos by title, channel and file name, and playlists by title and channel. Each card's `⋯` menu renames, re-downloads or opens a YouTube video, and deletes (to the trash, after a confirm).
 
 ## A playlist (`/p/<id>`, `components/PlaylistView.tsx`)
@@ -41,7 +43,7 @@ A playlist link's page is `components/SharedPlaylist.tsx`: the playlist's videos
 
 ## Settings (`/settings`)
 
-The tools found (`GET /api/tools`), the share links still good (any can be revoked; cast links aren't listed), and the lock.
+Storage (the same bar, and the library, the trash, what's free and the disk's size, written out: `#storage`), the tools found (`GET /api/tools`), the share links still good (any can be revoked; cast links aren't listed), and the lock.
 
 ## The lock
 

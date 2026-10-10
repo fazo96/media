@@ -185,3 +185,6 @@ export type TorrentImport = {
   /** Which of `files` is being worked on (an index into it). */
   current: number;
 };
+
+/** GET /api/storage: bytes the library's videos and the trash take, and the disk they're on. */
+export type DiskUsage = { library: number; trash: number; free: number; total: number };

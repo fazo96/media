@@ -163,3 +163,11 @@ export const IconCast = (p: P) => (
     <circle cx="3.4" cy="15.1" r="0.6" fill="currentColor" />
   </svg>
 );
+
+export const IconDisk = (p: P) => (
+  <svg {...base} {...p}>
+    <rect x="3" y="5" width="14" height="10" rx="2" />
+    <path d="M3 11h14" />
+    <circle cx="13.5" cy="13" r="0.6" fill="currentColor" />
+  </svg>
+);

@@ -64,6 +64,13 @@
   color: var(--ink);
 }
 
+/* In a row, the buttons are as tall as the link bar beside them. */
+@media (min-width: 561px) {
+  .add > .btn {
+    height: auto;
+  }
+}
+
 @media (max-width: 560px) {
   .add {
     flex-direction: column;
@@ -373,4 +380,41 @@ fieldset.sorts {
   padding: 0;
   border: 0;
   min-width: 0;
+}
+
+/* ─── The topbar's storage meter ───────────────────────── */
+.storage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 10px;
+  border-radius: 8px;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.storage:hover {
+  background: var(--bg-sunk);
+}
+
+.storage .storage-bar {
+  width: 48px;
+}
+
+@media (max-width: 720px) {
+  .storage {
+    padding: 0 6px;
+  }
+
+  .storage .storage-bar {
+    width: 28px;
+  }
+
+  .storage .storage-text {
+    display: none;
+  }
 }

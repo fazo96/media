@@ -58,6 +58,10 @@ Browse/Playlists/<Playlist>/01 - <Title>.mp4    -> ../../../videos/<id>/video.mp
 - A playlist's items are numbered in order; the ones not in the library are left out.
 - Samba follows links that stay inside a share by default (`follow symlinks = yes`, `wide links = no`), so sharing `MEDIA_DIR` or a folder above it is enough. What's watched over the share doesn't count as played here.
 
+## Disk usage
+
+`getDiskUsage()` (`lib/disk.ts`, `GET /api/storage`, the topbar's meter): `library` is the sum of the videos' `size` (their meta.json, so no walk of `videos/`), `trash` every file under `.trash/` (nothing empties it, so it's worth seeing), and `free` and `total` the disk `MEDIA_DIR` is on (`statfs`; free is what the service may write, as `df` says, not the blocks kept for root). Before the library's folder exists, it's the disk of the nearest folder above it.
+
 ## Share links
 
 `lib/shares.ts`. A link is a file named by its token (128 random bits in hex, `isValidShareToken`), made exclusively (`createExclusive`), holding the id of a video (`videoId`) or a playlist (`playlistId`), when it was made and when it expires (`null`: never). `/s/<token>` and `/api/s/<token>/…` play that one video, or the playlist's, without a session while `getShare()` finds it unexpired. A playlist link is live: `sharedVideo()` checks on every request that the video is in the playlist (and the library) now, so one taken out stops playing and one added starts ([api](api.md), [pages](pages.md#a-share-link-stoken-appstokenpagetsx)). Revoking deletes the file. Expiry is `1d`, `1w`, `1m` (an average month, so the page says "1 month") or `never`.

@@ -211,3 +211,30 @@
     opacity: 0.5;
   }
 }
+
+/* ─── The disk: the library, the rest, what's free (StorageBar) ── */
+.storage-bar {
+  display: flex;
+  overflow: hidden;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--bg-sunk);
+}
+
+.storage-library {
+  background: var(--accent);
+}
+
+.storage-other {
+  background: var(--ink-faint);
+  opacity: 0.6;
+}
+
+.is-low .storage-library {
+  background: var(--danger);
+}
+
+.is-low .storage-text,
+.is-low .storage-free {
+  color: var(--danger);
+}

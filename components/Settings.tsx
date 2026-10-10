@@ -3,11 +3,13 @@
 import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
-import type { ToolStatus } from "@/lib/types";
-import { IconBack, IconFilm, IconShare, IconWarn } from "./icons";
+import { formatSize } from "@/lib/format";
+import type { DiskUsage, ToolStatus } from "@/lib/types";
+import { IconBack, IconDisk, IconFilm, IconShare, IconWarn } from "./icons";
 import LockSettings from "./LockSettings";
 import SettingsHead from "./SettingsHead";
 import { SharedLinks } from "./ShareLinks";
+import { isLow, StorageBar } from "./StorageMeter";
 import ThemeButton from "./ThemeButton";
 
 const PURPOSE: Record<string, string> = {
@@ -65,6 +67,37 @@ function Tools() {
   );
 }
 
+/** What the library takes, the trash, and what's left on its disk. */
+function StorageSection() {
+  const [storage, setStorage] = useState<DiskUsage | null>(null);
+  const [error, setError] = useState(false);
+  useEffect(() => {
+    api<DiskUsage>("/api/storage").then(setStorage, () => setError(true));
+  }, []);
+
+  return (
+    <section id="storage" className={`settings-section storage-section ${storage && isLow(storage) ? "is-low" : ""}`} aria-labelledby="storage-title">
+      <SettingsHead icon={<IconDisk />} title="Storage" id="storage-title" />
+      {error && <p className="welcome-error">Couldn’t ask the server.</p>}
+      {storage && (
+        <>
+          <StorageBar storage={storage} />
+          <dl className="storage-figures">
+            <dt>Library</dt>
+            <dd>{formatSize(storage.library)}</dd>
+            <dt>In the trash</dt>
+            <dd>{formatSize(storage.trash)}</dd>
+            <dt>Free</dt>
+            <dd className="storage-free">{formatSize(storage.free)}</dd>
+            <dt>Disk</dt>
+            <dd>{formatSize(storage.total)}</dd>
+          </dl>
+        </>
+      )}
+    </section>
+  );
+}
+
 export default function Settings({ locked }: { locked: boolean }) {
   return (
     <div className="app">
@@ -78,6 +111,7 @@ export default function Settings({ locked }: { locked: boolean }) {
         </div>
       </header>
       <main className="settings">
+        <StorageSection />
         <Tools />
         <section className="settings-section" aria-labelledby="shares-title">
           <SettingsHead icon={<IconShare />} title="Shared links" id="shares-title" />

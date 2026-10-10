@@ -19,6 +19,7 @@
 | `GET/HEAD /api/s/<token>/file`, `GET /api/s/<token>/thumb` | **No session**: a share link's video (as `/api/videos/<id>/file`, `?download` as an attachment named for its title) and still, with `Access-Control-Allow-Origin: *`; 404 once the link has expired or been revoked, and for a playlist link (it has no video of its own) |
 | `GET/HEAD /api/s/<token>/v/<id>/file`, `GET /api/s/<token>/v/<id>/thumb` | **No session**: the same for one of a playlist link's videos, while it's in the playlist (checked on every request, `sharedVideo()`); 404 for any other video, and for a video link |
 | `GET /api/tools` | yt-dlp, ffmpeg, ffprobe: how each runs, its version |
+| `GET /api/storage` | `{ library, trash, free, total }` in bytes ([library](library.md#disk-usage)) |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 
 Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.

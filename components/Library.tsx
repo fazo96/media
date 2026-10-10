@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api, ApiError, createPlaylist, downloadPlaylist, importTorrent, inspectPlaylist, requestYoutube, searchYoutube, uploadVideo } from "@/lib/api";
 import { local } from "@/lib/storage";
-import type { Job, Playlist, Video } from "@/lib/types";
+import type { DiskUsage, Job, Playlist, Video } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
 import JobCard, { QueuedPlaylistCard, type Upload, UploadCard } from "./JobCard";
 import { IconDownload, IconLink, IconPlaylist, IconPlus, IconSearch, IconSettings, IconUpload } from "./icons";
@@ -13,6 +13,7 @@ import Logo from "./Logo";
 import PlaylistCard from "./PlaylistCard";
 import PlaylistPreview, { type Preview } from "./PlaylistPreview";
 import SearchResults, { type Search } from "./SearchResults";
+import StorageMeter from "./StorageMeter";
 import ThemeButton from "./ThemeButton";
 import TransmissionPanel from "./TransmissionPanel";
 import VideoCard from "./VideoCard";
@@ -44,10 +45,10 @@ const ACTIVE = new Set(["queued", "downloading", "processing"]);
 type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
 /** `transmission`: importing from Transmission is set up (MEDIA_TRANSMISSION_URL). */
-type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; transmission: boolean };
+type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; storage: DiskUsage; transmission: boolean };
 
 /** The home page: every video and playlist, the downloads under way, and the ways in (drop, paste, pick). */
-export default function Library({ initialVideos, initialJobs, initialPlaylists, transmission }: Props) {
+export default function Library({ initialVideos, initialJobs, initialPlaylists, storage, transmission }: Props) {
   const router = useRouter();
   const [videos, setVideos] = useState(initialVideos);
   const [jobs, setJobs] = useState(initialJobs);
@@ -409,6 +410,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           />
         </label>
         <div className="topbar-right">
+          <StorageMeter initial={storage} watch={`${videos.length}:${videos.reduce((sum, v) => sum + v.size, 0)}`} />
           <ThemeButton />
           <Link href="/settings" className="icon-btn" aria-label="Settings" title="Settings">
             <IconSettings />
