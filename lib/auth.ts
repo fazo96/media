@@ -109,9 +109,21 @@ export function sessionCookie(token: string, secure: boolean) {
   };
 }
 
-/** Only same-site paths, so /unlock?next= can't bounce people elsewhere. */
+/**
+ * Only same-site paths, so /unlock?next= can't bounce people elsewhere. Parsed
+ * the way a browser will (which drops tabs and newlines, and reads `\` as `/`),
+ * so `/\t/evil.com` can't pass for a path, and handed back as parsed.
+ */
 export function safeNext(next: string | null | undefined): string {
-  return next?.startsWith("/") && !next.startsWith("//") && !next.startsWith("/\\") ? next : "/";
+  if (!next?.startsWith("/")) return "/";
+  const base = "http://same.invalid";
+  let url: URL;
+  try {
+    url = new URL(next, base);
+  } catch {
+    return "/";
+  }
+  return url.origin === base ? url.pathname + url.search + url.hash : "/";
 }
 
 // At most 30 password checks per minute, instance-wide. Counted before
