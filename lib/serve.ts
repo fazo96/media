@@ -4,10 +4,10 @@ import { readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { Readable } from "node:stream";
 import { fileName } from "./browse";
-import { audioFile, audioMime, thumbFile, videoFile } from "./library";
+import { audioFile, thumbFile, videoFile } from "./library";
 import { parseRange } from "./range";
 import { notFound } from "./route";
-import type { Video } from "./types";
+import { listenMime, type Video } from "./types";
 
 // Sending a video's file, its audio alone (listen mode) and its still: to the
 // app (api/videos/<id>/…) and to a share link (api/s/<token>/…), which differ
@@ -22,7 +22,7 @@ export const serveVideo = (req: Request, v: Video, options: Options = {}) =>
 /** Its audio alone, for listen mode (made on first asking: lib/library.ts). 404 when it has none. */
 export async function serveAudio(req: Request, v: Video, options: Options = {}): Promise<Response> {
   const file = await audioFile(v);
-  return file ? serveFile(req, file, audioMime(v), fileName(v.title) + path.extname(file), options) : notFound();
+  return file ? serveFile(req, file, listenMime(v), fileName(v.title) + path.extname(file), options) : notFound();
 }
 
 async function serveFile(req: Request, file: string, mime: string, name: string, { headers: extra = {}, download = false }: Options): Promise<Response> {

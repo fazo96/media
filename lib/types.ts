@@ -43,9 +43,14 @@ export type Video = {
 /** A music file: no video in it, only audio, so it's always in listen mode (docs/library.md#music). */
 export const isAudio = (v: { videoCodec?: string }) => !v.videoCodec;
 
+/** The containers a browser plays video (and an audio track alone) in. */
+export type Container = "mp4" | "webm";
+
+/** The container listen mode keeps a video's track in: webm for Vorbis (mp4 can't hold it), mp4 for the rest. */
+export const listenContainer = (audioCodec: string | undefined): Container => (audioCodec === "vorbis" ? "webm" : "mp4");
+
 /** The type of what listen mode plays (api/videos/<id>/audio): a music file itself, or the video's track alone. */
-export const listenMime = (v: Pick<Video, "videoCodec" | "mime" | "audioCodec">) =>
-  isAudio(v) ? v.mime : v.audioCodec === "vorbis" ? "audio/webm" : "audio/mp4";
+export const listenMime = (v: Pick<Video, "videoCodec" | "mime" | "audioCodec">) => (isAudio(v) ? v.mime : `audio/${listenContainer(v.audioCodec)}`);
 
 /** A playlist's videos that are in the library (`byId`), in order. */
 export const inLibrary = <V extends { id: string }>(items: string[], byId: Map<string, V>): V[] => items.flatMap((id) => byId.get(id) ?? []);

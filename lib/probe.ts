@@ -1,5 +1,6 @@
 import "server-only";
 import { run } from "./tools";
+import { type Container, listenContainer } from "./types";
 
 // What a video or music file holds (ffprobe), whether a browser can play it,
 // and how to make it playable: a remux when only its container is wrong, with
@@ -125,7 +126,7 @@ const MP4_AUDIO = new Set(["aac", "mp3", "opus", "flac", "alac"]);
 const WEBM_VIDEO = new Set(["vp8", "vp9", "av1"]);
 const WEBM_AUDIO = new Set(["opus", "vorbis"]);
 
-export type Container = "mp4" | "webm";
+export type { Container };
 
 const VIDEO: Record<Container, Set<string>> = { mp4: MP4_VIDEO, webm: WEBM_VIDEO };
 const AUDIO: Record<Container, Set<string>> = { mp4: MP4_AUDIO, webm: WEBM_AUDIO };
@@ -134,6 +135,12 @@ const AUDIO: Record<Container, Set<string>> = { mp4: MP4_AUDIO, webm: WEBM_AUDIO
 // beside its AAC one), which VLC or Kodi can switch to. DTS and TrueHD don't
 // go in mp4.
 const KEEP: Record<Container, Set<string>> = { mp4: new Set([...MP4_AUDIO, "ac3", "eac3"]), webm: WEBM_AUDIO };
+
+/** A browser plays `codec` in `container`. */
+export const playsIn = (container: Container, codec: string) => AUDIO[container].has(codec);
+
+/** The extension an audio track alone takes in `container`: .m4a for mp4. */
+export const audioExt = (container: Container) => (container === "mp4" ? "m4a" : container);
 
 /**
  * Which audio track to play (an index into `tracks`, -1 for none): the first
@@ -196,39 +203,6 @@ export function plan(p: Probe, ext: string, languages: string[] = []): Plan {
   return { container, remux, playable: true, audio, convert, keep };
 }
 
-/**
- * Write the planned file: the video and the chosen audio track (converted to
- * AAC if planned), marked default, then the other tracks kept. The video is
- * copied, never re-encoded.
- */
-export async function remux(from: string, to: string, how: Plan, p: Probe, signal?: AbortSignal): Promise<void> {
-  const container = how.container as Container;
-  const fast = container === "mp4" ? ["-movflags", "+faststart"] : [];
-  const tracks = how.audio >= 0 ? [how.audio, ...how.keep] : [];
-  const audio = tracks.flatMap((i) => ["-map", `0:a:${i}`]);
-  const channels = p.audio[how.audio]?.channels ?? 2;
-  const convert = how.convert ? ["-c:a:0", "aac", "-b:a:0", channels > 2 ? "384k" : "192k"] : [];
-  const disposition = tracks.flatMap((_, n) => [`-disposition:a:${n}`, n === 0 ? "default" : "0"]);
-  await run(
-    "ffmpeg",
-    ["-v", "error", "-y", "-i", from, "-map", "0:v:0", ...audio, "-c", "copy", ...convert, ...disposition, ...fast, "-f", container, to],
-    { signal },
-  );
-}
-
-/**
- * Write one audio track alone (`index` into the probe's), for listen mode:
- * copied into `container` when a browser plays it there, converted to AAC
- * otherwise (then always mp4).
- */
-export async function extractAudio(from: string, to: string, index: number, track: AudioTrack, container: Container, signal?: AbortSignal): Promise<void> {
-  const codec = AUDIO[container].has(track.codec) ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", (track.channels ?? 2) > 2 ? "384k" : "192k"];
-  const fast = container === "mp4" ? ["-movflags", "+faststart"] : [];
-  await run("ffmpeg", ["-v", "error", "-y", "-i", from, "-map", `0:a:${index}`, "-vn", "-sn", "-dn", ...codec, ...fast, "-f", container, to], { signal });
-}
-
-/** The container listen mode keeps a track in: webm for Vorbis (mp4 can't hold it), mp4 for the rest. */
-export const audioContainer = (codec: string | undefined): Container => (codec === "vorbis" ? "webm" : "mp4");
 
 // Music files browsers play as they are: the extensions they come with, what
 // ffprobe calls the format, the codecs that play in it, and what it's kept as.
@@ -262,7 +236,7 @@ export function planAudio(p: Probe, ext: string, languages: string[] = []): Audi
   const track = p.audio[audio];
   const formats = p.format.split(",");
   const same = AUDIO_AS_IS.find((f) => f.ext.includes(ext) && formats.includes(f.format) && f.codecs.includes(track.codec));
-  const container = audioContainer(track.codec);
+  const container = listenContainer(track.codec);
   return {
     audio,
     asIs: same && p.audio.length === 1 ? { ext: same.keep, mime: same.mime } : null,
@@ -271,16 +245,6 @@ export function planAudio(p: Probe, ext: string, languages: string[] = []): Audi
   };
 }
 
-/** A 640px-wide still from a tenth of the way in (at most 10 seconds). */
-export async function thumbnail(file: string, to: string, duration: number): Promise<void> {
-  const at = Math.min(duration * 0.1, 10);
-  await run("ffmpeg", ["-v", "error", "-y", "-ss", at.toFixed(2), "-i", file, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", to]);
-}
-
-/** A music file's cover art, as a still like thumbnail()'s. */
-export async function cover(file: string, to: string): Promise<void> {
-  await run("ffmpeg", ["-v", "error", "-y", "-i", file, "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", to]);
-}
 
 export const MIME: Record<string, string> = {
   mp4: "video/mp4",

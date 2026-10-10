@@ -6,8 +6,9 @@ import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
-import { audioContainer, audioLanguages, cover, extractAudio, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, probe, remux, thumbnail } from "./probe";
-import { isAudio, listenMime, type Video } from "./types";
+import { cover, extractAudio, remux, thumbnail } from "./ffmpeg";
+import { audioExt, audioLanguages, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, probe } from "./probe";
+import { isAudio, listenContainer, type Video } from "./types";
 
 // The library on disk (docs/library.md): one folder per video (or music
 // file) under videos/, holding the file, meta.json and thumb.jpg.
@@ -114,12 +115,12 @@ async function keepVideo(file: string, ext: string, info: Probe, signal?: AbortS
   if (how.remux && how.container) {
     from = `${file}.remux.${how.container}`;
     if (how.convert) onConvert?.();
-    await remux(file, from, how, info, signal);
+    await remux(file, from, how, info, { signal });
   }
   return {
     from,
     name: `video.${how.container ?? (ext || "bin")}`,
-    mime: how.container === "mp4" ? "video/mp4" : how.container === "webm" ? "video/webm" : (MIME[ext] ?? "application/octet-stream"),
+    mime: how.container ? `video/${how.container}` : (MIME[ext] ?? "application/octet-stream"),
     playable: how.playable,
     audio: how.audio,
     convert: how.convert,
@@ -139,9 +140,8 @@ async function keepMusic(file: string, ext: string, info: Probe, signal?: AbortS
   if (how.asIs) return { from: file, name: `track.${how.asIs.ext}`, mime: how.asIs.mime, playable: true, audio: how.audio, convert: false, still };
   const from = `${file}.track.${how.container}`;
   if (how.convert) onConvert?.();
-  await extractAudio(file, from, how.audio, info.audio[how.audio], how.container, signal);
-  const webm = how.container === "webm";
-  return { from, name: webm ? "track.webm" : "track.m4a", mime: webm ? "audio/webm" : "audio/mp4", playable: true, audio: how.audio, convert: how.convert, still };
+  await extractAudio(file, from, how.audio, info.audio[how.audio], how.container, { signal });
+  return { from, name: `track.${audioExt(how.container)}`, mime: `audio/${how.container}`, playable: true, audio: how.audio, convert: how.convert, still };
 }
 
 /**
@@ -240,8 +240,8 @@ const extracting = new Map<string, Promise<string | null>>();
  */
 export function audioFile(v: Video): Promise<string | null> {
   if (isAudio(v)) return Promise.resolve(videoFile(v));
-  const container = audioContainer(v.audioCodec);
-  const file = path.join(videoDir(v.id), container === "webm" ? "audio.webm" : "audio.m4a");
+  const container = listenContainer(v.audioCodec);
+  const file = path.join(videoDir(v.id), `audio.${audioExt(container)}`);
   const ready = async () => {
     const [audio, video] = await Promise.all([stat(file).catch(() => null), stat(videoFile(v))]);
     return audio && audio.mtimeMs >= video.mtimeMs;
@@ -269,5 +269,3 @@ export function audioFile(v: Video): Promise<string | null> {
   return job;
 }
 
-/** The MIME type of listen mode's file. */
-export const audioMime = listenMime;
