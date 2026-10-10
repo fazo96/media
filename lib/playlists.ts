@@ -1,6 +1,7 @@
 import "server-only";
 import { mkdir, readdir, readFile, rename } from "node:fs/promises";
 import path from "node:path";
+import { refreshBrowse } from "./browse";
 import { createExclusive, serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { PLAYLISTS_DIR, TRASH_DIR } from "./paths";
@@ -50,7 +51,10 @@ export async function createPlaylist(details: New): Promise<Playlist> {
   for (let n = 1; n < 1000; n++) {
     const id = n === 1 ? base : `${base.slice(0, 75)}-${n}`;
     const playlist: Playlist = { ...details, id, items: [...new Set(details.items ?? [])], createdAt: now, updatedAt: now };
-    if (await createExclusive(file(id), JSON.stringify(playlist, null, 2))) return playlist;
+    if (await createExclusive(file(id), JSON.stringify(playlist, null, 2))) {
+      refreshBrowse();
+      return playlist;
+    }
   }
   throw new Error("no free id");
 }
@@ -63,6 +67,7 @@ export function updatePlaylist(id: string, change: (p: Playlist) => Playlist): P
     const next = { ...change(p), id, updatedAt: Date.now() };
     next.items = [...new Set(next.items)];
     await writeAtomic(file(id), JSON.stringify(next, null, 2));
+    refreshBrowse();
     return next;
   });
 }
@@ -73,6 +78,7 @@ export async function trashPlaylist(id: string): Promise<boolean> {
   return serially(file(id), async () => {
     try {
       await rename(file(id), path.join(TRASH_DIR, `playlist-${id}.${Date.now()}.json`));
+      refreshBrowse();
       return true;
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;

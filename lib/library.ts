@@ -2,6 +2,7 @@ import "server-only";
 import { randomBytes } from "node:crypto";
 import { mkdir, readdir, readFile, rename, rm, stat } from "node:fs/promises";
 import path from "node:path";
+import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
@@ -49,6 +50,7 @@ export function updateVideo(id: string, change: (v: Video) => Video): Promise<Vi
     if (!v) return null;
     const next = { ...change(v), id };
     await writeAtomic(file, JSON.stringify(next, null, 2));
+    if (next.title !== v.title) refreshBrowse(); // not for every progress save
     return next;
   });
 }
@@ -58,6 +60,7 @@ export async function trashVideo(id: string): Promise<boolean> {
   await mkdir(TRASH_DIR, { recursive: true });
   try {
     await rename(videoDir(id), path.join(TRASH_DIR, `${id}.${Date.now()}`));
+    refreshBrowse();
     return true;
   } catch (err) {
     if ((err as NodeJS.ErrnoException).code === "ENOENT") return false;
@@ -163,6 +166,7 @@ export async function addVideo(
   await writeAtomic(path.join(staged, META), JSON.stringify({ id, ...meta }, null, 2));
   await rename(staged, videoDir(id));
   await rm(path.dirname(file), { recursive: true, force: true });
+  refreshBrowse();
   return { id, ...meta };
 }
 

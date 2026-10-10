@@ -15,3 +15,5 @@ export const PLAYLISTS_DIR = path.join(MEDIA_DIR, "playlists");
 export const TRASH_DIR = path.join(MEDIA_DIR, ".trash");
 /** Uploads and downloads in progress; emptied when the server starts. */
 export const INCOMING_DIR = path.join(MEDIA_DIR, ".incoming");
+/** The library under readable names, as links into videos/ (lib/browse.ts), for a file share. */
+export const BROWSE_DIR = path.join(MEDIA_DIR, "Browse");
