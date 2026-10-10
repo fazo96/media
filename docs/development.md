@@ -10,10 +10,12 @@ The user's media usually runs from this checkout as a production build on port 3
 
 ### Redeploying
 
-When the user asks to redeploy (downtime is fine for now):
+**The user builds, starts and stops this server; agents don't.** Work on the code and commit it; when it's ready, tell the user it needs a redeploy rather than doing it (no stopping the server, `npm run build` or `npm start` here).
 
-1. Check nothing is downloading (`curl -s localhost:3300/api/jobs` is `[]`): a restart drops the queue.
-2. Stop the server, found by port and working directory (see [stopping servers](#stopping-servers-you-started)); wait until `ss -ltn` no longer shows :3300.
+For the user's reference:
+
+1. Check nothing is downloading: a restart drops the queue. `curl -s localhost:3300/api/jobs` is `[]` (with the lock on it answers `locked`; then no `yt-dlp` process and an empty `data/.incoming/` say the same).
+2. Stop the server (`npm start` and its `next-server`, found by port and working directory: see [stopping servers](#stopping-servers-you-started)); wait until `ss -ltn` no longer shows :3300.
 3. `nix develop --command npm run build` in this checkout.
 4. Start it again in the background with the command above, then check `curl localhost:3300/` and https://media.trippy.pizza/ answer 200.
 
