@@ -1,6 +1,6 @@
 import { type APIRequestContext, expect, type Locator, type Page, test } from "@playwright/test";
 import type { Video } from "../lib/types";
-import { unique, upload } from "./helpers";
+import { MUSIC, unique, upload } from "./helpers";
 
 test("the player plays, counts the play and saves where it is", async ({ page, request }) => {
   const v = await upload(request, `${unique("Playable")}.mp4`);
@@ -262,4 +262,19 @@ test("a playlist turns listen mode on for all its videos, which play straight th
   await listen.click();
   await expect(listen).toHaveAttribute("aria-pressed", "false");
   for (const v of [a, b, c]) await expect.poll(async () => (await videoOf(request, v.id)).listen).toBeUndefined();
+});
+
+test("music plays in listen mode, its cover for a still, with no way out of it", async ({ page, request }) => {
+  const m = await upload(request, `${unique("Tune")}.mp3`, MUSIC);
+  await page.goto(`/v/${m.id}`);
+  const layer = layerOf(page);
+  await expect(layer).toHaveAttribute("src", `/api/videos/${m.id}/audio`);
+  await expect(page.locator(".screen.is-listening img")).toBeVisible();
+  await expect(page.locator(".screen video")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Listen" })).toHaveCount(0);
+  await expect(page.locator(".watch-meta")).toContainText("The Testers");
+  await playMuted(layer);
+  await expect.poll(() => timeOf(layer)).toBeGreaterThan(0.5);
+  await expect.poll(async () => (await videoOf(request, m.id)).playCount).toBe(1);
+  await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.artist)).toBe("The Testers");
 });

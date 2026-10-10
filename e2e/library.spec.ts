@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { FIXTURE, unique, upload } from "./helpers";
+import { FIXTURE, MUSIC, unique, upload } from "./helpers";
 
 test("files picked go up and into the grid", async ({ page }) => {
   const name = unique("Picked");
@@ -192,4 +192,14 @@ test("back from a video, the library shows what changed while it was open", asyn
   await page.locator(`[data-video="${v.id}"]`).getByRole("button", { name: /^More for/ }).click();
   await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
   await expect(page.getByRole("menuitemcheckbox", { name })).toBeVisible();
+});
+
+test("music picked goes up and into the grid, with its cover and artist", async ({ page }) => {
+  const name = unique("Picked tune");
+  await page.goto("/");
+  await page.locator('input[type="file"]').setInputFiles({ name: `${name}.mp3`, mimeType: "audio/mpeg", buffer: (await import("node:fs")).readFileSync(MUSIC) });
+  const card = page.locator(".card", { hasText: name });
+  await expect(card.locator(".duration")).toHaveText("0:05");
+  await expect(card.locator(".thumb.is-music img")).toBeVisible();
+  await expect(card.locator(".card-meta")).toContainText("The Testers · not played yet");
 });

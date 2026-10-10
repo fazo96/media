@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { type AudioTrack, audioLanguages, languageKey, parseProbe, pickAudio, plan, type Probe } from "../lib/probe.ts";
+import { type AudioTrack, audioLanguages, languageKey, parseProbe, pickAudio, plan, planAudio, type Probe } from "../lib/probe.ts";
 
 const a = (codec: string, language?: string, isDefault = false): AudioTrack => ({ codec, language, default: isDefault });
 const p = (format: string, videoCodec?: string, ...audio: (string | AudioTrack)[]): Probe => ({
@@ -8,6 +8,8 @@ const p = (format: string, videoCodec?: string, ...audio: (string | AudioTrack)[
   duration: 10,
   videoCodec,
   audio: audio.map((t) => (typeof t === "string" ? a(t) : t)),
+  cover: false,
+  tags: {},
 });
 const MP4 = "mov,mp4,m4a,3gp,3g2,mj2";
 const MKV = "matroska,webm";
@@ -91,6 +93,50 @@ test("parseProbe skips cover art and reads the streams", () => {
       { codec: "ac3", language: "ita", channels: 6, default: true },
       { codec: "aac", language: undefined, channels: 2, default: false },
     ],
+    cover: true,
+    tags: {},
   });
   assert.equal(parseProbe(JSON.stringify({ format: { duration: "N/A" } })).duration, 0);
+});
+
+test("parseProbe reads a music file's tags, in either case, and its cover", () => {
+  const mp3 = parseProbe(
+    JSON.stringify({
+      format: { format_name: "mp3", duration: "180", tags: { title: "Song", artist: "Band", album: "Record" } },
+      streams: [
+        { codec_type: "audio", codec_name: "mp3", channels: 2 },
+        { codec_type: "video", codec_name: "png", disposition: { attached_pic: 1 } },
+      ],
+    }),
+  );
+  assert.equal(mp3.videoCodec, undefined);
+  assert.equal(mp3.cover, true);
+  assert.deepEqual(mp3.tags, { title: "Song", artist: "Band" });
+  // A flac's are in capitals; an ogg's are its stream's.
+  assert.deepEqual(parseProbe(JSON.stringify({ format: { format_name: "flac", tags: { TITLE: "Loud", ARTIST: " " } } })).tags, { title: "Loud" });
+  const ogg = parseProbe(JSON.stringify({ format: { format_name: "ogg" }, streams: [{ codec_type: "audio", codec_name: "opus", tags: { TITLE: "Quiet", ARTIST: "Someone" } }] }));
+  assert.deepEqual(ogg.tags, { title: "Quiet", artist: "Someone" });
+  assert.equal(ogg.cover, false);
+});
+
+test("planAudio keeps music browsers play as it is, and takes the rest's track out", () => {
+  const asIs = (format: string, ext: string, codec: string) => planAudio(p(format, undefined, codec), ext).asIs;
+  assert.deepEqual(asIs("mp3", "mp3", "mp3"), { ext: "mp3", mime: "audio/mpeg" });
+  assert.deepEqual(asIs(MP4, "m4a", "aac"), { ext: "m4a", mime: "audio/mp4" });
+  assert.deepEqual(asIs("flac", "flac", "flac"), { ext: "flac", mime: "audio/flac" });
+  assert.deepEqual(asIs("ogg", "opus", "opus"), { ext: "ogg", mime: "audio/ogg" });
+  assert.deepEqual(asIs("ogg", "ogg", "vorbis"), { ext: "ogg", mime: "audio/ogg" });
+  assert.deepEqual(asIs(MKV, "webm", "opus"), { ext: "webm", mime: "audio/webm" });
+  assert.deepEqual(asIs("wav", "wav", "pcm_s16le"), { ext: "wav", mime: "audio/wav" });
+  // An mka is matroska, whatever it holds; an extension that lies isn't believed.
+  assert.equal(asIs(MKV, "mka", "flac"), null);
+  assert.equal(asIs("mp3", "m4a", "mp3"), null);
+  assert.equal(asIs("wav", "wav", "pcm_s32le"), null);
+
+  assert.deepEqual(planAudio(p(MKV, undefined, "flac"), "mka"), { audio: 0, asIs: null, container: "mp4", convert: false });
+  assert.deepEqual(planAudio(p(MKV, undefined, "vorbis"), "mka"), { audio: 0, asIs: null, container: "webm", convert: false });
+  assert.deepEqual(planAudio(p("asf", undefined, "wmav2"), "wma"), { audio: 0, asIs: null, container: "mp4", convert: true });
+  // Of several tracks, the one wanted, alone.
+  const two = p(MP4, undefined, a("aac", "eng", true), a("aac", "ita"));
+  assert.deepEqual(planAudio(two, "m4a", ["ita"]), { audio: 1, asIs: null, container: "mp4", convert: false });
 });

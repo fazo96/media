@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { IconDownload, IconWarn } from "@/components/icons";
+import { IconDownload, IconStill, IconWarn } from "@/components/icons";
 import Logo from "@/components/Logo";
 import SharedPlaylist, { type SharedItem } from "@/components/SharedPlaylist";
 import ThemeButton from "@/components/ThemeButton";
 import { formatDuration, formatHeight, formatSize } from "@/lib/format";
 import { getShare, sharedPlaylist, sharedVideo } from "@/lib/shares";
-import type { Playlist, Video } from "@/lib/types";
+import { isAudio, type Playlist, type Video } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -71,16 +71,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
     };
   }
   const { video: v } = found;
+  const music = isAudio(v);
   return {
     title: v.title,
-    description: v.channel ?? "A video shared from media",
+    description: v.channel ?? (music ? "Music shared from media" : "A video shared from media"),
     robots,
     openGraph: {
       title: v.title,
-      type: "video.other",
+      type: music ? "music.song" : "video.other",
       url: `${base}/s/${token}`,
       images: v.hasThumb ? [{ url: `${base}/api/s/${token}/thumb`, width: 640 }] : undefined,
-      videos: [{ url: `${base}/api/s/${token}/file`, type: v.mime, width: v.width, height: v.height }],
+      ...(music
+        ? { audio: [{ url: `${base}/api/s/${token}/file`, type: v.mime }] }
+        : { videos: [{ url: `${base}/api/s/${token}/file`, type: v.mime, width: v.width, height: v.height }] }),
     },
     twitter: { card: v.hasThumb ? "summary_large_image" : "summary", title: v.title },
   };
@@ -122,10 +125,18 @@ export default async function Page({ params, searchParams }: Props) {
       <Header />
       <main className="watch watch-shared">
         <section className="stage">
-          <div className="screen">
-            {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
-            <video src={file} poster={v.hasThumb ? `/api/s/${token}/thumb` : undefined} controls playsInline preload="metadata" />
-          </div>
+          {isAudio(v) ? (
+            <>
+              <div className="screen is-listening">{v.hasThumb ? <img src={`/api/s/${token}/thumb`} alt="" /> : <IconStill audio />}</div>
+              {/* biome-ignore lint/a11y/useMediaCaption: music */}
+              <audio className="shared-audio" src={file} controls preload="metadata" />
+            </>
+          ) : (
+            <div className="screen">
+              {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
+              <video src={file} poster={v.hasThumb ? `/api/s/${token}/thumb` : undefined} controls playsInline preload="metadata" />
+            </div>
+          )}
           {!v.playable && (
             <p className="notice is-error" role="alert">
               <IconWarn />

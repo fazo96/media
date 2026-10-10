@@ -174,8 +174,61 @@ test("a video without audio has no listen mode file", { skip: !ffmpeg }, async (
 });
 
 test("withListen sets listen mode, and leaves no field when it's off", () => {
-  const v = { id: "x", title: "X", playCount: 0 } as unknown as Parameters<typeof withListen>[0];
+  const v = { id: "x", title: "X", playCount: 0, videoCodec: "h264" } as unknown as Parameters<typeof withListen>[0];
   assert.equal(withListen(v, true).listen, true);
   assert.equal("listen" in withListen(withListen(v, true), false), false);
   assert.equal(withListen(v, undefined), v);
+});
+
+test("music can't leave listen mode", () => {
+  const song = { id: "s", title: "S", playCount: 0, listen: true } as unknown as Parameters<typeof withListen>[0];
+  assert.equal(withListen(song, false).listen, true);
+});
+
+/** Five seconds of a tone, written by ffmpeg with `args` (the codec, tags, a cover) into `name` in a new incoming folder. */
+async function tone(name: string, args: string[], cover = false) {
+  const file = path.join(await incomingDir(), name);
+  const art = cover ? ["-f", "lavfi", "-i", "color=c=red:s=320x320:d=1"] : [];
+  const map = cover ? ["-map", "0:a", "-map", "1:v", "-c:v", "mjpeg", "-disposition:v", "attached_pic"] : [];
+  execFileSync("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=5", ...art, ...map, ...args, file]);
+  return file;
+}
+
+test("a dropped mp3 is music: kept as it is, with its cover, its tags and listen mode", { skip: !ffmpeg }, async () => {
+  const mp3 = await tone("upload.mp3", ["-c:a", "libmp3lame", "-b:a", "64k", "-id3v2_version", "3", "-metadata", "title=Tone Song", "-metadata", "artist=The Testers"], true);
+  const v = await addVideo(mp3, { title: "01 tone song", source: "file", originalName: "01 tone song.mp3" });
+  assert.equal(v.id, "tone-song");
+  assert.equal(v.title, "Tone Song");
+  assert.equal(v.channel, "The Testers");
+  assert.equal(v.file, "track.mp3");
+  assert.equal(v.mime, "audio/mpeg");
+  assert.equal(v.videoCodec, undefined);
+  assert.equal(v.audioCodec, "mp3");
+  assert.equal(v.playable, true);
+  assert.equal(v.listen, true);
+  assert.equal(v.hasThumb, true);
+  assert.ok(Math.abs(v.duration - 5) < 0.2, String(v.duration));
+  assert.deepEqual(await getVideo(v.id), v);
+  // Listen mode plays the file itself: nothing is made beside it.
+  assert.equal(await audioFile(v), videoFile(v));
+  assert.deepEqual((await readdir(path.dirname(videoFile(v)))).sort(), ["meta.json", "thumb.jpg", "track.mp3"]);
+});
+
+test("music in a container browsers don't play has its track copied into m4a", { skip: !ffmpeg }, async () => {
+  const mka = await tone("upload.mka", ["-c:a", "flac"]);
+  const v = await addVideo(mka, { title: "Lossless", source: "file", originalName: "Lossless.mka" });
+  assert.equal(v.file, "track.m4a");
+  assert.equal(v.mime, "audio/mp4");
+  assert.equal(v.audioCodec, "flac");
+  // No cover, and no still taken from it: there's nothing to see.
+  assert.equal(v.hasThumb, false);
+  assert.deepEqual(streams(videoFile(v)), [["audio", "flac", "und"]]);
+});
+
+test("music browsers can't play is converted to AAC", { skip: !ffmpeg }, async () => {
+  const wma = await tone("upload.wma", ["-c:a", "wmav2"]);
+  const v = await addVideo(wma, { title: "Old Format", source: "file", originalName: "Old Format.wma" });
+  assert.equal(v.file, "track.m4a");
+  assert.equal(v.audioCodec, "aac");
+  assert.deepEqual(streams(videoFile(v)), [["audio", "aac", "und"]]);
 });

@@ -185,6 +185,11 @@
   transition: transform 0.3s;
 }
 
+/* Music: its cover art is square, so it's shown whole. */
+.thumb.is-music img {
+  object-fit: contain;
+}
+
 a.thumb:hover img {
   transform: scale(1.03);
 }

@@ -6,11 +6,11 @@ import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
-import { audioContainer, audioLanguages, extractAudio, MIME, pickAudio, plan, playedAsIs, probe, remux, thumbnail } from "./probe";
-import type { Video } from "./types";
+import { audioContainer, audioLanguages, cover, extractAudio, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, probe, remux, thumbnail } from "./probe";
+import { isAudio, listenMime, type Video } from "./types";
 
-// The library on disk (docs/library.md): one folder per video under
-// videos/, holding the video file, meta.json and thumb.jpg.
+// The library on disk (docs/library.md): one folder per video (or music
+// file) under videos/, holding the file, meta.json and thumb.jpg.
 
 const META = "meta.json";
 export const THUMB = "thumb.jpg";
@@ -55,9 +55,9 @@ export function updateVideo(id: string, change: (v: Video) => Video): Promise<Vi
   });
 }
 
-/** `v` with listen mode on or off (off leaves no field behind); as it is when `listen` is undefined. */
+/** `v` with listen mode on or off (off leaves no field behind); as it is when `listen` is undefined, or it's music (always on). */
 export function withListen(v: Video, listen: boolean | undefined): Video {
-  if (listen === undefined) return v;
+  if (listen === undefined || isAudio(v)) return v;
   const { listen: _, ...rest } = v;
   return listen ? { ...rest, listen: true } : rest;
 }
@@ -104,13 +104,55 @@ export class NotAVideo extends Error {}
 
 type Details = Pick<Video, "title" | "source" | "originalName" | "youtubeId" | "url" | "channel" | "torrentHash" | "torrentName">;
 
+/** How a file is kept: the one to move in, its name there and type, the audio track that plays, and a still that came with it. */
+type Kept = { from: string; name: string; mime: string; playable: boolean; audio: number; convert: boolean; still?: string };
+
+/** A video: as it is, or remuxed (plan()). */
+async function keepVideo(file: string, ext: string, info: Probe, signal?: AbortSignal, onConvert?: () => void): Promise<Kept> {
+  const how = plan(info, ext, audioLanguages());
+  let from = file;
+  if (how.remux && how.container) {
+    from = `${file}.remux.${how.container}`;
+    if (how.convert) onConvert?.();
+    await remux(file, from, how, info, signal);
+  }
+  return {
+    from,
+    name: `video.${how.container ?? (ext || "bin")}`,
+    mime: how.container === "mp4" ? "video/mp4" : how.container === "webm" ? "video/webm" : (MIME[ext] ?? "application/octet-stream"),
+    playable: how.playable,
+    audio: how.audio,
+    convert: how.convert,
+  };
+}
+
+/** Music: as it is, or its track alone (planAudio()). Its cover art, if it has some, is its still. */
+async function keepMusic(file: string, ext: string, info: Probe, signal?: AbortSignal, onConvert?: () => void): Promise<Kept> {
+  const how = planAudio(info, ext, audioLanguages());
+  let still: string | undefined;
+  if (info.cover) {
+    try {
+      await cover(file, `${file}.cover.jpg`);
+      still = `${file}.cover.jpg`;
+    } catch {} // music without a picture is still music
+  }
+  if (how.asIs) return { from: file, name: `track.${how.asIs.ext}`, mime: how.asIs.mime, playable: true, audio: how.audio, convert: false, still };
+  const from = `${file}.track.${how.container}`;
+  if (how.convert) onConvert?.();
+  await extractAudio(file, from, how.audio, info.audio[how.audio], how.container, signal);
+  const webm = how.container === "webm";
+  return { from, name: webm ? "track.webm" : "track.m4a", mime: webm ? "audio/webm" : "audio/mp4", playable: true, audio: how.audio, convert: how.convert, still };
+}
+
 /**
  * Bring a file from INCOMING_DIR into the library: probe it, remux it if its
  * container or its audio keeps it from playing (the language wanted first,
  * converted to AAC if need be; `onConvert` is told before that), take a
- * thumbnail (unless `thumb` brings one), and write its meta.json. `id` forces
- * the id (YouTube's), replacing what's there. The incoming file is moved or
- * removed either way.
+ * thumbnail (unless `thumb` brings one), and write its meta.json. A music
+ * file (audio, no video) is kept as it is or as its track alone, with its
+ * cover art for a still, its tags' title and artist, and listen mode on.
+ * `id` forces the id (YouTube's), replacing what's there. The incoming file
+ * is moved or removed either way.
  */
 export async function addVideo(
   file: string,
@@ -119,46 +161,41 @@ export async function addVideo(
 ): Promise<Video> {
   const ext = path.extname(details.originalName ?? file).slice(1).toLowerCase();
   const info = await probe(file).catch(() => null);
-  if (!info?.videoCodec) throw new NotAVideo("That file has no video in it that ffmpeg can read.");
-  const how = plan(info, ext, audioLanguages());
-  const track = info.audio[how.audio];
-
-  let source = file;
-  if (how.remux && how.container) {
-    source = `${file}.remux.${how.container}`;
-    if (how.convert) onConvert?.();
-    await remux(file, source, how, info, signal);
-  }
-  const fileExt = how.container ?? (ext || "bin");
-  const name = `video.${fileExt}`;
+  if (!info || (!info.videoCodec && info.audio.length === 0)) throw new NotAVideo("That file has no video or audio in it that ffmpeg can read.");
+  const music = isAudio(info);
+  const kept = await (music ? keepMusic : keepVideo)(file, ext, info, signal, onConvert);
+  const track = info.audio[kept.audio];
 
   // Everything is ready beside the incoming file before the library sees it.
   const staged = path.join(path.dirname(file), "staged");
   await mkdir(staged, { recursive: true });
-  await rename(source, path.join(staged, name));
+  await rename(kept.from, path.join(staged, kept.name));
+  const still = thumb ?? kept.still;
   let hasThumb = false;
   try {
-    if (thumb) await rename(thumb, path.join(staged, THUMB));
-    else await thumbnail(path.join(staged, name), path.join(staged, THUMB), info.duration);
-    hasThumb = true;
+    if (still) await rename(still, path.join(staged, THUMB));
+    else if (!music) await thumbnail(path.join(staged, kept.name), path.join(staged, THUMB), info.duration);
+    hasThumb = !!still || !music;
   } catch {} // a video without a still is still a video
 
   const meta: Omit<Video, "id"> = {
     ...details,
-    file: name,
-    mime: how.container === "mp4" ? "video/mp4" : how.container === "webm" ? "video/webm" : (MIME[ext] ?? "application/octet-stream"),
-    size: (await stat(path.join(staged, name))).size,
+    // Music says what it is: its title, and its artist where a video has its channel.
+    ...(music && info.tags.title && details.source !== "youtube" ? { title: info.tags.title } : {}),
+    ...(music && info.tags.artist && !details.channel ? { channel: info.tags.artist } : {}),
+    file: kept.name,
+    mime: kept.mime,
+    size: (await stat(path.join(staged, kept.name))).size,
     duration: info.duration,
-    width: info.width,
-    height: info.height,
-    videoCodec: info.videoCodec,
-    audioCodec: how.convert ? "aac" : track?.codec,
+    ...(music ? {} : { width: info.width, height: info.height, videoCodec: info.videoCodec }),
+    audioCodec: kept.convert ? "aac" : track?.codec,
     ...(track?.language ? { audioLanguage: track.language } : {}),
-    playable: how.playable,
+    playable: kept.playable,
     hasThumb,
     addedAt: Date.now(),
     playCount: 0,
     position: 0,
+    ...(music ? { listen: true } : {}),
   };
 
   let id: string;
@@ -179,7 +216,7 @@ export async function addVideo(
     await mkdir(VIDEOS_DIR, { recursive: true });
   } else {
     // The claimed folder is empty, and renaming a folder onto an empty one replaces it.
-    id = await claim(slugify(details.title));
+    id = await claim(slugify(meta.title));
   }
   await writeAtomic(path.join(staged, META), JSON.stringify({ id, ...meta }, null, 2));
   await rename(staged, videoDir(id));
@@ -199,9 +236,10 @@ const extracting = new Map<string, Promise<string | null>>();
  * Listen mode's file: the video's audio track alone (`audio.m4a`, or
  * `audio.webm` for Vorbis) beside it, made on first asking and kept, remade
  * when the video file is newer. The track is the one the video plays. Null
- * when it has no audio.
+ * when it has no audio. Music has nothing to take out: it's its own file.
  */
 export function audioFile(v: Video): Promise<string | null> {
+  if (isAudio(v)) return Promise.resolve(videoFile(v));
   const container = audioContainer(v.audioCodec);
   const file = path.join(videoDir(v.id), container === "webm" ? "audio.webm" : "audio.m4a");
   const ready = async () => {
@@ -232,4 +270,4 @@ export function audioFile(v: Video): Promise<string | null> {
 }
 
 /** The MIME type of listen mode's file. */
-export const audioMime = (v: Video) => (audioContainer(v.audioCodec) === "webm" ? "audio/webm" : "audio/mp4");
+export const audioMime = listenMime;

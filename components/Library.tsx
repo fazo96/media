@@ -41,6 +41,9 @@ function sorted(videos: Video[], sort: Sort): Video[] {
   return [...videos].sort(by[sort]);
 }
 
+/** What a file chooser or a drop takes when the browser gives no type: videos, and music. */
+const MEDIA_EXT = /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp|mp3|m4a|m4b|flac|ogg|oga|opus|wav|aac|wma)$/i;
+
 const ACTIVE = new Set(["queued", "downloading", "processing"]);
 
 type Notice = { text: string; error?: boolean; action?: { label: string; run: () => void } };
@@ -260,9 +263,9 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   const queue = useRef<Promise<void>>(Promise.resolve());
   const addFiles = useCallback(
     (files: File[]) => {
-      const list = files.filter((f) => f.type.startsWith("video/") || /\.(mkv|mp4|m4v|mov|webm|avi|ts|flv|wmv|3gp)$/i.test(f.name));
+      const list = files.filter((f) => /^(video|audio)\//.test(f.type) || MEDIA_EXT.test(f.name));
       if (!list.length) {
-        if (files.length) say("Those don’t look like videos.", true);
+        if (files.length) say("Those don’t look like videos or music.", true);
         return;
       }
       setNotice(null);
@@ -421,7 +424,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       </header>
 
       <main className="library">
-        <section className="add" aria-label="Add videos">
+        <section className="add" aria-label="Add videos or music">
           <form className="add-link" onSubmit={submitLink}>
             {isPlaylistLink ? <IconPlaylist /> : isLink ? <IconLink /> : <IconSearch />}
             <input
@@ -448,7 +451,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           <input
             ref={fileInput}
             type="file"
-            accept="video/*,.mkv,.m4v,.mov,.webm,.avi"
+            accept="video/*,audio/*,.mkv,.m4v,.mov,.webm,.avi,.mp3,.m4a,.flac,.ogg,.opus,.wav,.aac,.wma"
             multiple
             hidden
             onChange={(e) => {
@@ -503,7 +506,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
             </div>
             <h1>Your library is empty</h1>
             <p>
-              Drop video files anywhere on this page, or paste a YouTube link. Everything is kept on this machine, so it
+              Drop video or music files anywhere on this page, or paste a YouTube link. Everything is kept on this machine, so it
               plays without a connection.
             </p>
           </section>

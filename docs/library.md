@@ -4,6 +4,7 @@ Everything lives under `MEDIA_DIR` (default `./data`, `lib/paths.ts`):
 
 ```
 videos/<id>/video.mp4   the video (or .webm, or the original extension when it can't play)
+            track.mp3   or music's file instead (.m4a, .flac, .ogg, .webm, .wav: see Music, below)
             meta.json   the Video (lib/types.ts): title, source, codecs, duration, size,
                         addedAt, lastPlayedAt, playCount, position (seconds, 0 when finished),
                         listen (listen mode, when on);
@@ -30,7 +31,7 @@ An id names a folder, so `isValidId` (`lib/ids.ts`: `[a-z0-9][a-z0-9_-]{0,79}`) 
 
 `addVideo()` (`lib/library.ts`) takes a file in `.incoming/`:
 
-1. `ffprobe` it (`lib/probe.ts`). No video stream (cover art doesn't count): `NotAVideo`, answered 415.
+1. `ffprobe` it (`lib/probe.ts`). No video stream (cover art doesn't count) but some audio: it's [music](#music), kept as below. Neither: `NotAVideo`, answered 415.
 2. `pickAudio()` chooses the audio track to play: one in the first language of `MEDIA_AUDIO_LANGS` (e.g. `ita,eng`) there's a track in, a playable one of those before the rest; failing that, the file's default track, else its first. Languages match in any spelling (`it`, `ita`, `it-IT`; `ger` and `deu`; `languageKey()`). Untagged tracks match none.
 3. `plan()` decides how to keep it. H.264/VP9/AV1 with AAC/MP3/Opus/FLAC in mp4 or mov, and VP8/VP9/AV1 with Opus/Vorbis in webm, stay as they are, unless they have several audio tracks and the one a browser would play (the one marked default, else the first) isn't the one chosen. Otherwise `remux()` writes a new file (`ffmpeg -c copy`, seconds): mp4 or webm, the chosen track first and marked default (browsers play the default track, wherever it is), then the file's other tracks the container can hold (in mp4: AAC, MP3, Opus, FLAC, ALAC, AC-3, E-AC-3; in webm: Opus, Vorbis), which VLC or Kodi can switch to. When the video plays but the chosen track doesn't (AC-3, E-AC-3, DTS, TrueHD…), only that track is **converted** to AAC (192k, 384k for surround; about a minute for a film; `onConvert` lets a torrent's card say so), and its original is kept behind it if mp4 holds it. The video is never re-encoded: anything else (HEVC, MPEG-4 Part 2) is kept as it is, every track with it, with `playable: false`, and the page warns. Subtitles aren't kept in a new file. `audioCodec` and `audioLanguage` in meta.json are the chosen track's.
 4. Take a thumbnail, unless one came with it.
@@ -38,11 +39,22 @@ An id names a folder, so `isValidId` (`lib/ids.ts`: `[a-z0-9][a-z0-9_-]{0,79}`) 
 
 `updateVideo()` serializes writes to one `meta.json` (a progress save and a rename can land together); each write is atomic (`lib/files.ts`).
 
+## Music
+
+A file with audio and no video (an mp3, an album's flac) is music. It goes through `addVideo()` like a video and is a `Video` like one, with no `videoCodec`, `width` or `height`: `isAudio()` (`lib/types.ts`) is how the server and the pages tell. What's different:
+
+- `planAudio()` decides how to keep it. MP3 in mp3, AAC/MP3/Opus/FLAC/ALAC in m4a (or mp4, m4b), FLAC in flac, Opus/Vorbis in ogg (or opus), Opus/Vorbis in webm, and 8/16/24-bit and float PCM in wav stay as they are, when the extension says what ffprobe finds and there's one track. Otherwise `extractAudio()` writes the track wanted (`pickAudio()`, as for a video) alone into m4a, copied (seconds), or webm for Vorbis; one a browser can't play (WMA, AC-3, APE…) is converted to AAC (`onConvert` as for a video). The file is `track.<ext>`, its `mime` an `audio/` type.
+- Its still is its cover art (`cover()`: an mp3's, m4a's or flac's picture, which ffprobe lists as a video stream marked `attached_pic`), at 640px like a video's. Without one there's no still (the pages show a note), since there's nothing to take one from.
+- Its tags name it: `title` (any case: a flac's are in capitals, an ogg's are its track's) replaces the file's name, so the id is a slug of that, and `artist` is its `channel`.
+- It's always in [listen mode](#listen-mode): `listen: true` from the start, and `withListen()` leaves it on whatever it's asked (so a playlist's Listen turning off leaves its music be). `audioFile()` is the file itself; nothing is made beside it.
+
+In [Browse](#browse) it's with the videos, under its own extension (`<Title>.mp3`). Transmission imports and YouTube downloads are videos only.
+
 ## Listen mode
 
 Some videos are really music. `listen: true` in a video's meta.json (`PATCH /api/videos/<id> { listen }`, or a playlist's `{ listen }`, which sets it on every video in it then; a playlist keeps no setting of its own) has the player play its audio alone, which a phone keeps playing with the screen off: Chrome on Android pauses a background `<video>` with a picture, never one without ([pages](pages.md#listen-mode)). Off leaves no field behind (`withListen()`). A forced re-download keeps it, as it keeps the watching.
 
-`audioFile()` (`lib/library.ts`, served by `GET /api/videos/<id>/audio`) makes the file the first time it's asked for, beside the video, and keeps it (remade when the video file is newer): the track the video plays (in a playable file, the default one, which [adding](#adding-a-video) made the language wanted; otherwise `pickAudio()`'s), copied (`extractAudio()` in `lib/probe.ts`, seconds) into mp4 as `audio.m4a`, or webm as `audio.webm` for Vorbis, or converted to AAC when a browser can't play it (AC-3, DTS…; about a minute for a film). Two requests at once wait for the same ffmpeg; it writes to a temporary name and renames. A video without audio has none (404). The file goes to the trash with its folder, and isn't counted in the [disk usage](#disk-usage)'s `library` (that sums the videos' `size`).
+`audioFile()` (`lib/library.ts`, served by `GET /api/videos/<id>/audio`) makes the file the first time it's asked for, beside the video, and keeps it (remade when the video file is newer): the track the video plays (in a playable file, the default one, which [adding](#adding-a-video) made the language wanted; otherwise `pickAudio()`'s), copied (`extractAudio()` in `lib/probe.ts`, seconds) into mp4 as `audio.m4a`, or webm as `audio.webm` for Vorbis, or converted to AAC when a browser can't play it (AC-3, DTS…; about a minute for a film). Two requests at once wait for the same ffmpeg; it writes to a temporary name and renames. A video without audio has none (404); [music](#music) is its own file. The file goes to the trash with its folder, and isn't counted in the [disk usage](#disk-usage)'s `library` (that sums the videos' `size`).
 
 ## Playlists
 

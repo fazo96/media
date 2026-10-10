@@ -2,7 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDuration, formatHeight, formatSize } from "@/lib/format";
-import { IconDownload, IconFilm, IconWarn } from "./icons";
+import { isAudio } from "@/lib/types";
+import { IconDownload, IconStill, IconWarn } from "./icons";
 import { useMediaSession } from "./useMediaSession";
 
 /** What a playlist link's page knows of a video: enough to play and list it, nothing about watching it here. */
@@ -28,7 +29,11 @@ type Props = { token: string; title: string; channel?: string; videos: SharedIte
 export default function SharedPlaylist({ token, title, channel, videos, start }: Props) {
   const [index, setIndex] = useState(start);
   const [failed, setFailed] = useState(false);
-  const ref = useRef<HTMLVideoElement>(null);
+  // A video, or for music an <audio>.
+  const ref = useRef<HTMLMediaElement>(null);
+  const attach = (el: HTMLMediaElement | null) => {
+    ref.current = el;
+  };
   // Autoplay only once someone's watching: not on opening the link, but after an end or a pick.
   const playNext = useRef(false);
   const v = videos[index];
@@ -70,24 +75,43 @@ export default function SharedPlaylist({ token, title, channel, videos, start }:
   return (
     <main className="watch">
       <section className="stage">
-        <div className="screen">
-          {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
-          <video
-            ref={ref}
-            key={v.id}
-            src={`${base(v)}/file`}
-            poster={v.hasThumb ? `${base(v)}/thumb` : undefined}
-            controls
-            playsInline
-            preload="metadata"
-            onError={() => setFailed(true)}
-            onEnded={() => index + 1 < videos.length && pick(index + 1)}
-          />
-        </div>
+        {isAudio(v) ? (
+          <>
+            <div className="screen is-listening">{v.hasThumb ? <img src={`${base(v)}/thumb`} alt="" /> : <IconStill audio />}</div>
+            {/* biome-ignore lint/a11y/useMediaCaption: music */}
+            <audio
+              ref={attach}
+              key={v.id}
+              className="shared-audio"
+              src={`${base(v)}/file`}
+              controls
+              preload="metadata"
+              onError={() => setFailed(true)}
+              onEnded={() => index + 1 < videos.length && pick(index + 1)}
+            />
+          </>
+        ) : (
+          <div className="screen">
+            {/* biome-ignore lint/a11y/useMediaCaption: the library's videos come without caption files */}
+            <video
+              ref={attach}
+              key={v.id}
+              src={`${base(v)}/file`}
+              poster={v.hasThumb ? `${base(v)}/thumb` : undefined}
+              controls
+              playsInline
+              preload="metadata"
+              onError={() => setFailed(true)}
+              onEnded={() => index + 1 < videos.length && pick(index + 1)}
+            />
+          </div>
+        )}
         {(failed || !v.playable) && (
           <p className="notice is-error" role="alert">
             <IconWarn />
-            This is {v.videoCodec ?? "an unusual codec"}, which this browser can’t play. Download it to watch it in a video player.
+            {isAudio(v)
+              ? "This browser couldn’t play it. Download it to play it elsewhere."
+              : `This is ${v.videoCodec ?? "an unusual codec"}, which this browser can’t play. Download it to watch it in a video player.`}
           </p>
         )}
         <div className="watch-info">
@@ -120,7 +144,7 @@ export default function SharedPlaylist({ token, title, channel, videos, start }:
                 }}
               >
                 <span className="other-thumb">
-                  {o.hasThumb ? <img src={`${base(o)}/thumb`} alt="" loading="lazy" /> : <IconFilm />}
+                  {o.hasThumb ? <img src={`${base(o)}/thumb`} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
                   {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
                 </span>
                 <span className="other-text">

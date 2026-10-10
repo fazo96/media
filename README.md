@@ -10,6 +10,7 @@ A self-hosted library for the videos you come back to. Drop files in or paste Yo
 ## How it works
 
 - **Drop video files** anywhere on the page, or pick them with **Add files**. They're streamed to the server, so size doesn't matter. A file in the wrong container (an mkv with H.264, say) is repacked into one browsers play, in seconds and without re-encoding. One a browser can't play at all (HEVC, mostly) still goes in the library, with a warning.
+- **Drop music** the same way: an mp3, an m4a, a flac. It keeps its cover art, title and artist, and plays as audio alone, on from page to page and with a phone's screen off. A format browsers can't play (WMA, say) is converted.
 - **Paste a YouTube link**, or just its id, into the box or anywhere on the page. [yt-dlp](https://github.com/yt-dlp/yt-dlp) downloads it in the background, preferring H.264 so it plays everywhere, up to 1080p. Pasting the same video again finds the copy you already have.
 - **Search YouTube** from the same box: type anything that isn't a link, and add a result to the library with one click.
 - **Import from [Transmission](https://transmissionbt.com/)**: its finished downloads that are videos show in a panel, and one click copies a file into the library and then (unless you untick it) removes the torrent and its files from Transmission.

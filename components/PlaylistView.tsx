@@ -6,9 +6,9 @@ import { useEffect, useState } from "react";
 import { api, ApiError, apiDelete, changePlaylist, requestYoutube } from "@/lib/api";
 import { formatDuration } from "@/lib/format";
 import { youtubeIdFromVideoId } from "@/lib/ids";
-import type { Job, Playlist, Video } from "@/lib/types";
+import { isAudio, type Job, type Playlist, type Video } from "@/lib/types";
 import { youtubeUrl } from "@/lib/youtube";
-import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconTrash } from "./icons";
+import { IconBack, IconClose, IconEdit, IconExternal, IconFilm, IconHeadphones, IconPlay, IconRefresh, IconStill, IconTrash } from "./icons";
 import { playlistCount } from "./PlaylistCard";
 import ShareButton from "./ShareLinks";
 import NowPlayingWidget from "./NowPlayingWidget";
@@ -119,12 +119,14 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   };
 
   // Listen mode is each video's: the playlist's button sets it for all of them, and shows on once they all have it.
-  const allListen = present.length > 0 && present.every((v) => v.listen);
+  // Music is always in it, so the button is for the videos (and isn't there for an album).
+  const videosIn = present.filter((v) => !isAudio(v));
+  const allListen = videosIn.length > 0 && videosIn.every((v) => v.listen);
   const toggleListen = async () => {
     const listen = !allListen;
     try {
       setP(await changePlaylist(p.id, { listen }));
-      setVideos((prev) => prev.map((v) => (p.items.includes(v.id) ? { ...v, listen } : v)));
+      setVideos((prev) => prev.map((v) => (p.items.includes(v.id) && !isAudio(v) ? { ...v, listen } : v)));
     } catch (err) {
       fail(err);
     }
@@ -178,7 +180,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                 <IconPlay /> Play all
               </Link>
             )}
-            {present.length > 0 && (
+            {videosIn.length > 0 && (
               <button
                 type="button"
                 className={`btn ${allListen ? "is-on" : ""}`}
@@ -249,7 +251,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
                     : "Deleted from the library";
               const thumb = (
                 <span className="other-thumb">
-                  {v ? v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconFilm /> : ytId ? <img src={`https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} /> : <IconFilm />}
+                  {v ? v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} /> : ytId ? <img src={`https://i.ytimg.com/vi/${ytId}/mqdefault.jpg`} alt="" loading="lazy" onError={(e) => e.currentTarget.remove()} /> : <IconFilm />}
                   {v && v.duration > 0 && <span className="duration">{formatDuration(v.duration)}</span>}
                 </span>
               );

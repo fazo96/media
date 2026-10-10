@@ -4,8 +4,8 @@ import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import { api, ApiError, apiDelete } from "@/lib/api";
 import { formatAgo, formatDuration } from "@/lib/format";
-import type { Playlist, Video } from "@/lib/types";
-import { IconEdit, IconExternal, IconFilm, IconMore, IconPlaylist, IconRefresh, IconTrash, IconWarn } from "./icons";
+import { isAudio, type Playlist, type Video } from "@/lib/types";
+import { IconEdit, IconExternal, IconMore, IconPlaylist, IconRefresh, IconStill, IconTrash, IconWarn } from "./icons";
 import PlaylistPicker from "./PlaylistPicker";
 
 type Props = {
@@ -44,8 +44,8 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
 
   const watched = v.duration > 0 && v.position > 0 ? Math.min(1, v.position / v.duration) : 0;
   const meta = [
-    v.source === "youtube" ? (v.channel ?? "YouTube") : v.source === "torrent" ? "Torrent" : "File",
-    v.playCount ? `watched ${v.playCount}×` : "not watched yet",
+    v.source === "youtube" ? (v.channel ?? "YouTube") : isAudio(v) && v.channel ? v.channel : v.source === "torrent" ? "Torrent" : "File",
+    v.playCount ? `${isAudio(v) ? "played" : "watched"} ${v.playCount}×` : isAudio(v) ? "not played yet" : "not watched yet",
     v.lastPlayedAt ? formatAgo(v.lastPlayedAt) : null,
   ]
     .filter(Boolean)
@@ -79,8 +79,8 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
 
   return (
     <article className="card" ref={ref} data-video={v.id}>
-      <Link href={`/v/${v.id}`} className="thumb" aria-label={`Play ${v.title}`}>
-        {v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconFilm />}
+      <Link href={`/v/${v.id}`} className={`thumb ${isAudio(v) ? "is-music" : ""}`} aria-label={`Play ${v.title}`}>
+        {v.hasThumb ? <img src={thumbUrl(v)} alt="" loading="lazy" /> : <IconStill audio={isAudio(v)} />}
         {v.duration > 0 && <span className="duration">{formatDuration(v.duration)}</span>}
         {!v.playable && (
           <span className="badge-warn" title="This browser may not be able to play it">

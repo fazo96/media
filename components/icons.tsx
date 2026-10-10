@@ -142,6 +142,18 @@ export const IconFilm = (p: P) => (
   </svg>
 );
 
+export const IconMusic = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M7.5 14.5V5l9-1.5V13" />
+    <circle cx="5.5" cy="14.5" r="2" />
+    <circle cx="14.5" cy="13" r="2" />
+    <path d="M7.5 8l9-1.5" />
+  </svg>
+);
+
+/** What stands in for a missing still: a film, or a note for music. */
+export const IconStill = ({ audio, ...p }: P & { audio?: boolean }) => (audio ? <IconMusic {...p} /> : <IconFilm {...p} />);
+
 export const IconDownload = (p: P) => (
   <svg {...base} {...p}>
     <path d="M10 3.5V13M6 9l4 4 4-4M3.5 13v2.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V13" />

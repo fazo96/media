@@ -40,6 +40,13 @@ export type Video = {
   listen?: boolean;
 };
 
+/** A music file: no video in it, only audio, so it's always in listen mode (docs/library.md#music). */
+export const isAudio = (v: { videoCodec?: string }) => !v.videoCodec;
+
+/** The type of what listen mode plays (api/videos/<id>/audio): a music file itself, or the video's track alone. */
+export const listenMime = (v: Pick<Video, "videoCodec" | "mime" | "audioCodec">) =>
+  isAudio(v) ? v.mime : v.audioCodec === "vorbis" ? "audio/webm" : "audio/mp4";
+
 export type JobState = "queued" | "downloading" | "processing" | "done" | "failed";
 
 /** A YouTube download or an import from Transmission, as GET /api/jobs lists it. */

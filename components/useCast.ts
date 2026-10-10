@@ -2,13 +2,14 @@
 
 import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { castShare, saveProgress } from "@/lib/api";
-import type { Video } from "@/lib/types";
+import { listenMime, type Video } from "@/lib/types";
 
-// Casting the player's video to a Chromecast or Android TV (docs/pages.md#casting),
-// with Google's Cast sender SDK and its Default Media Receiver, so there's no
-// receiver app of our own. The device has no session cookie, so it plays from
-// a short-lived share link (lib/shares.ts). Only Chrome has Cast: elsewhere the
-// SDK says it isn't available and there's no button.
+// Casting the player's video (in listen mode, its audio alone) to a Chromecast
+// or Android TV (docs/pages.md#casting), with Google's Cast sender SDK and its
+// Default Media Receiver, so there's no receiver app of our own. The device has
+// no session cookie, so it plays from a short-lived share link (lib/shares.ts).
+// Only Chrome has Cast: elsewhere the SDK says it isn't available and there's
+// no button.
 
 const SDK = "https://www.gstatic.com/cv/js/sender/v1/cast_sender.js?loadCastFramework=1";
 /** How often, while the TV plays, where it is goes to the server (as the player does). */
@@ -89,11 +90,20 @@ function loadSdk() {
 
 type Options = {
   video: Video;
-  el: RefObject<HTMLVideoElement | null>;
+  /**
+   * The element playing it here, if one is: the page's video, or in listen
+   * mode the layer's audio. Paused while the TV plays, and (the video) back
+   * where the TV was after.
+   */
+  local: () => HTMLMediaElement | null;
+  /** Listen mode: the TV plays its audio alone (api/s/<token>/audio), and the page's play button isn't the TV's. */
+  listen: boolean;
   /** Set while the TV plays it, so the page's own player doesn't save its (stale) place. */
   casting: RefObject<boolean>;
   /** The TV played it to the end. */
   onEnded: () => void;
+  /** The TV took over (the local element paused by then), or handed back, at where it was (null: not known, or it ended). */
+  onCasting?: (on: boolean, at: number | null) => void;
 };
 
 export type Cast = {
@@ -101,19 +111,26 @@ export type Cast = {
   available: boolean;
   /** The device's name while casting to one. */
   device: string | null;
+  /** The TV has it paused. */
+  paused: boolean;
   error: string | null;
   /** Pick a device and play there, or stop casting. */
   toggle: () => void;
+  /** Play or pause on the TV. */
+  playOrPause: () => void;
 };
 
 /** Cast for the player: playing on the TV from where the page was, keeping the server told where it is, and back. */
-export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
+export function useCast({ video: v, local: getLocal, listen, casting, onEnded, onCasting }: Options): Cast {
   const [available, setAvailable] = useState(false);
   const [device, setDevice] = useState<string | null>(null);
+  const [paused, setPaused] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const sdk = useRef<Awaited<ReturnType<typeof loadSdk>>>(null);
-  const ended = useRef(onEnded);
-  ended.current = onEnded;
+  const remote = useRef<RemoteController | null>(null);
+  // Read when they're needed, so the effect below doesn't start over for each render.
+  const handlers = useRef({ getLocal, onEnded, onCasting });
+  handlers.current = { getLocal, onEnded, onCasting };
 
   useEffect(() => {
     let gone = false;
@@ -122,19 +139,22 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
     let finished = false;
     let off = () => {};
 
-    /** Play this video on the session's device, unless it already is (a reload while casting). */
+    /** Play this video (or in listen mode its audio) on the session's device, unless it already is (a reload while casting). */
     const play = async (session: CastSession, s: NonNullable<typeof sdk.current>) => {
-      const local = el.current;
+      const local = handlers.current.getLocal();
+      const from = local && local.readyState >= 1 ? local.currentTime : v.position;
       casting.current = true;
       local?.pause();
+      handlers.current.onCasting?.(true, from);
       setDevice(session.getCastDevice().friendlyName);
       setError(null);
       try {
         const share = await castShare(v.id);
         if (gone) return;
         const base = `${location.origin}/api/s/${share.token}`;
-        if (session.getMediaSession()?.media?.contentId === `${base}/file`) return;
-        const info = new s.chromeCast.media.MediaInfo(`${base}/file`, v.mime);
+        const url = listen ? `${base}/audio` : `${base}/file`;
+        if (session.getMediaSession()?.media?.contentId === url) return;
+        const info = new s.chromeCast.media.MediaInfo(url, listen ? listenMime(v) : v.mime);
         const meta = new s.chromeCast.media.GenericMediaMetadata();
         meta.title = v.title;
         if (v.channel) meta.subtitle = v.channel;
@@ -142,7 +162,7 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
         info.metadata = meta;
         info.streamType = "BUFFERED";
         const request = new s.chromeCast.media.LoadRequest(info);
-        request.currentTime = local?.currentTime ?? v.position;
+        request.currentTime = from;
         request.autoplay = true;
         finished = false;
         await session.loadMedia(request);
@@ -156,8 +176,10 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
       setDevice(null);
       if (!casting.current) return;
       casting.current = false;
-      const local = el.current;
-      if (local && remoteTime >= 0 && !finished) local.currentTime = remoteTime;
+      const at = finished ? null : remoteTime >= 0 ? remoteTime : null;
+      const local = handlers.current.getLocal();
+      if (local && at !== null) local.currentTime = at;
+      handlers.current.onCasting?.(false, at);
     };
 
     void loadSdk().then((s) => {
@@ -176,6 +198,7 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
       // Where the TV is: saved like the page's player saves, and the end counted.
       const player = new framework.RemotePlayer();
       const controller = new framework.RemotePlayerController(player);
+      remote.current = controller;
       const onTime = () => {
         if (!casting.current || !player.duration) return;
         remoteTime = player.currentTime;
@@ -185,12 +208,13 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
         }
       };
       const onState = () => {
+        setPaused(player.playerState === "PAUSED");
         // IDLE near the end is the video finishing (stopping or a new load are IDLE too, elsewhere).
         if (!casting.current || finished || player.playerState !== "IDLE") return;
         if (player.duration && remoteTime >= player.duration - 2) {
           finished = true;
           void saveProgress(v.id, { position: 0, ended: true });
-          ended.current();
+          handlers.current.onEnded();
         }
       };
 
@@ -203,6 +227,7 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
         context.removeEventListener(framework.CastContextEventType.SESSION_STATE_CHANGED, onSession);
         controller.removeEventListener(framework.RemotePlayerEventType.CURRENT_TIME_CHANGED, onTime);
         controller.removeEventListener(framework.RemotePlayerEventType.PLAYER_STATE_CHANGED, onState);
+        remote.current = null;
       };
 
       setAvailable(context.getCastState() !== framework.CastState.NO_DEVICES_AVAILABLE);
@@ -211,7 +236,8 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
       if (session) void play(session, s);
 
       // The page's play button, or K, while the TV plays: the TV's to play or pause.
-      const local = el.current;
+      // (In listen mode the page has no element of its own: its controls say what they do.)
+      const local = listen ? null : handlers.current.getLocal();
       const onLocalPlay = () => {
         if (!casting.current) return;
         local?.pause();
@@ -232,7 +258,7 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
       // `casting` stays set, so the page's own last save (of its stale place) doesn't follow this one.
       if (casting.current && remoteTime >= 0 && !finished) void saveProgress(v.id, { position: remoteTime }, true);
     };
-  }, [v.id, v.mime, v.title, v.channel, v.hasThumb, v.position, el, casting]);
+  }, [v.id, v.mime, v.audioCodec, v.videoCodec, v.title, v.channel, v.hasThumb, v.position, listen, casting]);
 
   const toggle = useCallback(() => {
     const s = sdk.current;
@@ -242,5 +268,7 @@ export function useCast({ video: v, el, casting, onEnded }: Options): Cast {
     else context.requestSession().catch(() => {}); // closing the picker is fine
   }, []);
 
-  return { available, device, error, toggle };
+  const playOrPause = useCallback(() => remote.current?.playOrPause(), []);
+
+  return { available, device, paused, error, toggle, playOrPause };
 }

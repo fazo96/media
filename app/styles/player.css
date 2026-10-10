@@ -62,6 +62,13 @@
   opacity: 0.6;
 }
 
+/* Music on a share link's page: the browser's own controls under its still. */
+.shared-audio {
+  display: block;
+  width: 100%;
+  margin-top: 10px;
+}
+
 .listen-controls {
   display: flex;
   align-items: center;

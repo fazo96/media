@@ -2,7 +2,7 @@
 
 ## Unit tests
 
-`npm test` runs `tests/**/*.test.ts` with Node's built-in runner (Node strips the types: no `enum` or parameter properties in modules tests load). `tests/setup.mjs` runs first: it points `MEDIA_DIR` at a fresh temporary folder (without it `lib/paths.ts` would use `./data`) and registers `tests/hooks.mjs`, which resolves `@/`, extensionless imports and an empty `server-only`, so server modules load. `tests/library.test.ts` runs real ffmpeg on `tests/fixtures/clip.mp4` (a generated 30-second test pattern, 227 KB) and skips without it.
+`npm test` runs `tests/**/*.test.ts` with Node's built-in runner (Node strips the types: no `enum` or parameter properties in modules tests load). `tests/setup.mjs` runs first: it points `MEDIA_DIR` at a fresh temporary folder (without it `lib/paths.ts` would use `./data`) and registers `tests/hooks.mjs`, which resolves `@/`, extensionless imports and an empty `server-only`, so server modules load. `tests/library.test.ts` runs real ffmpeg on `tests/fixtures/clip.mp4` (a generated 30-second test pattern, 227 KB), and on music it makes itself (a tone, as mp3, mka and wma), and skips without it. The browser tests upload `tests/fixtures/tone.mp3` for music (5 seconds of a tone, a red square for its cover, "The Testers" for its artist, no title; `MUSIC` in `e2e/helpers.ts`).
 
 `npm run typecheck` runs `tsc --noEmit`; `npm run lint` runs Biome's linter (`biome.jsonc`: recommended rules minus the ones listed there with why; formatting left alone). CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and a build, and the browser tests in a job of their own.
 

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { unique, upload } from "./helpers";
+import { MUSIC, unique, upload } from "./helpers";
 
 // Every route's answers, without a browser.
 
@@ -207,4 +207,24 @@ test("listen mode: set on a video or a whole playlist, and its audio served alon
 
   await request.delete(path);
   for (const v of [a, b]) await request.delete(`/api/videos/${v.id}`);
+});
+
+test("music: kept as it is, always in listen mode, and its own listen mode file; a cast link has a video's audio", async ({ request }) => {
+  const m = await upload(request, `${unique("Tune")}.mp3`, MUSIC);
+  expect(m).toMatchObject({ file: "track.mp3", mime: "audio/mpeg", audioCodec: "mp3", channel: "The Testers", listen: true, hasThumb: true, playable: true });
+  expect(m.videoCodec).toBeUndefined();
+  expect((await request.get(`/api/videos/${m.id}/file`)).headers()["content-type"]).toBe("audio/mpeg");
+  const audio = await request.get(`/api/videos/${m.id}/audio`);
+  expect(audio.headers()["content-type"]).toBe("audio/mpeg");
+  expect((await audio.body()).length).toBe(m.size);
+  expect((await (await request.patch(`/api/videos/${m.id}`, { data: { listen: false } })).json()).listen).toBe(true);
+
+  // Casting in listen mode: the link's audio is the video's track alone, for any origin (the TV's).
+  const v = await upload(request, `${unique("Cast")}.mp4`);
+  const share = (await (await request.post("/api/shares", { data: { video: v.id, cast: true } })).json()) as { token: string };
+  const cast = await request.get(`/api/s/${share.token}/audio`);
+  expect(cast.status()).toBe(200);
+  expect(cast.headers()["content-type"]).toBe("audio/mp4");
+  expect(cast.headers()["access-control-allow-origin"]).toBe("*");
+  expect((await request.get(`/api/s/${"0".repeat(32)}/audio`)).status()).toBe(404);
 });

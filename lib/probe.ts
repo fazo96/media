@@ -1,10 +1,10 @@
 import "server-only";
 import { run } from "./tools";
 
-// What a video file holds (ffprobe), whether a browser can play it, and how to
-// make it playable: a remux when only its container is wrong, with the audio
-// track in the language wanted first, converted to AAC when a browser can't
-// play it. The video itself is never re-encoded.
+// What a video or music file holds (ffprobe), whether a browser can play it,
+// and how to make it playable: a remux when only its container is wrong, with
+// the audio track in the language wanted first, converted to AAC when a
+// browser can't play it. The video itself is never re-encoded.
 
 export type AudioTrack = {
   codec: string;
@@ -24,10 +24,16 @@ export type Probe = {
   videoCodec?: string;
   /** The audio tracks, in the file's order. */
   audio: AudioTrack[];
+  /** It has cover art (an mp3's, an m4a's, a flac's): a picture, not a video. */
+  cover: boolean;
+  /** What a music file says it is, when it says (its tags, in either case). */
+  tags: { title?: string; artist?: string };
 };
 
+type Tags = Record<string, string | undefined>;
+
 type FfprobeOut = {
-  format?: { format_name?: string; duration?: string };
+  format?: { format_name?: string; duration?: string; tags?: Tags };
   streams?: {
     codec_type?: string;
     codec_name?: string;
@@ -35,26 +41,30 @@ type FfprobeOut = {
     height?: number;
     channels?: number;
     disposition?: { attached_pic?: number; default?: number };
-    tags?: { language?: string };
+    tags?: Tags;
   }[];
 };
 
 export function parseProbe(json: string): Probe {
   const data = JSON.parse(json) as FfprobeOut;
-  // Cover art in an mp4 shows up as a video stream; it isn't the video.
+  // Cover art in an mp4 (or an mp3, a flac) shows up as a video stream; it isn't the video.
   const video = data.streams?.find((s) => s.codec_type === "video" && !s.disposition?.attached_pic);
-  const audio = (data.streams ?? [])
-    .filter((s) => s.codec_type === "audio")
-    .map((s): AudioTrack => {
-      const language = s.tags?.language?.trim().toLowerCase();
-      return {
-        codec: s.codec_name ?? "",
-        language: language && language !== "und" ? language : undefined,
-        channels: s.channels,
-        default: s.disposition?.default === 1,
-      };
-    });
+  const audioStreams = (data.streams ?? []).filter((s) => s.codec_type === "audio");
+  const audio = audioStreams.map((s): AudioTrack => {
+    const language = s.tags?.language?.trim().toLowerCase();
+    return {
+      codec: s.codec_name ?? "",
+      language: language && language !== "und" ? language : undefined,
+      channels: s.channels,
+      default: s.disposition?.default === 1,
+    };
+  });
   const duration = Number(data.format?.duration);
+  // The file's tags (mp3, m4a, flac), or in an ogg or opus file its first track's; named in any case (TITLE in a flac).
+  const tags: Tags = {};
+  for (const from of [audioStreams[0]?.tags, data.format?.tags]) {
+    for (const [k, value] of Object.entries(from ?? {})) if (value?.trim()) tags[k.toLowerCase()] = value.trim();
+  }
   return {
     format: data.format?.format_name ?? "",
     duration: Number.isFinite(duration) ? duration : 0,
@@ -62,6 +72,8 @@ export function parseProbe(json: string): Probe {
     height: video?.height,
     videoCodec: video?.codec_name,
     audio,
+    cover: !!data.streams?.some((s) => s.codec_type === "video" && s.disposition?.attached_pic),
+    tags: { ...(tags.title ? { title: tags.title } : {}), ...(tags.artist ? { artist: tags.artist } : {}) },
   };
 }
 
@@ -209,19 +221,65 @@ export async function remux(from: string, to: string, how: Plan, p: Probe, signa
  * copied into `container` when a browser plays it there, converted to AAC
  * otherwise (then always mp4).
  */
-export async function extractAudio(from: string, to: string, index: number, track: AudioTrack, container: Container): Promise<void> {
+export async function extractAudio(from: string, to: string, index: number, track: AudioTrack, container: Container, signal?: AbortSignal): Promise<void> {
   const codec = AUDIO[container].has(track.codec) ? ["-c:a", "copy"] : ["-c:a", "aac", "-b:a", (track.channels ?? 2) > 2 ? "384k" : "192k"];
   const fast = container === "mp4" ? ["-movflags", "+faststart"] : [];
-  await run("ffmpeg", ["-v", "error", "-y", "-i", from, "-map", `0:a:${index}`, "-vn", "-sn", "-dn", ...codec, ...fast, "-f", container, to]);
+  await run("ffmpeg", ["-v", "error", "-y", "-i", from, "-map", `0:a:${index}`, "-vn", "-sn", "-dn", ...codec, ...fast, "-f", container, to], { signal });
 }
 
 /** The container listen mode keeps a track in: webm for Vorbis (mp4 can't hold it), mp4 for the rest. */
 export const audioContainer = (codec: string | undefined): Container => (codec === "vorbis" ? "webm" : "mp4");
 
+// Music files browsers play as they are: the extensions they come with, what
+// ffprobe calls the format, the codecs that play in it, and what it's kept as.
+const AUDIO_AS_IS: { ext: string[]; format: string; codecs: string[]; keep: string; mime: string }[] = [
+  { ext: ["mp3"], format: "mp3", codecs: ["mp3"], keep: "mp3", mime: "audio/mpeg" },
+  { ext: ["m4a", "m4b", "mp4"], format: "mp4", codecs: [...MP4_AUDIO], keep: "m4a", mime: "audio/mp4" },
+  { ext: ["flac"], format: "flac", codecs: ["flac"], keep: "flac", mime: "audio/flac" },
+  { ext: ["ogg", "oga", "opus"], format: "ogg", codecs: ["opus", "vorbis"], keep: "ogg", mime: "audio/ogg" },
+  { ext: ["webm"], format: "webm", codecs: [...WEBM_AUDIO], keep: "webm", mime: "audio/webm" },
+  { ext: ["wav"], format: "wav", codecs: ["pcm_s16le", "pcm_s24le", "pcm_u8", "pcm_f32le"], keep: "wav", mime: "audio/wav" },
+];
+
+export type AudioPlan = {
+  /** The track that plays, an index into the probe's. */
+  audio: number;
+  /** Kept as it is: the extension and type it's kept with. Null: that track is written out alone (extractAudio). */
+  asIs: { ext: string; mime: string } | null;
+  /** What it's written out into: mp4 (an .m4a), or webm for Vorbis. */
+  container: Container;
+  /** Converted to AAC there: a browser can't play it as it is (WMA, AC-3, APE…). */
+  convert: boolean;
+};
+
+/**
+ * How to keep a music file (audio, no video): as it is when a browser plays
+ * it and it has one track; otherwise the track wanted alone, copied into m4a
+ * (webm for Vorbis) or converted to AAC. `ext` as for plan().
+ */
+export function planAudio(p: Probe, ext: string, languages: string[] = []): AudioPlan {
+  const audio = pickAudio(p.audio, languages);
+  const track = p.audio[audio];
+  const formats = p.format.split(",");
+  const same = AUDIO_AS_IS.find((f) => f.ext.includes(ext) && formats.includes(f.format) && f.codecs.includes(track.codec));
+  const container = audioContainer(track.codec);
+  return {
+    audio,
+    asIs: same && p.audio.length === 1 ? { ext: same.keep, mime: same.mime } : null,
+    container,
+    convert: !AUDIO[container].has(track.codec),
+  };
+}
+
 /** A 640px-wide still from a tenth of the way in (at most 10 seconds). */
 export async function thumbnail(file: string, to: string, duration: number): Promise<void> {
   const at = Math.min(duration * 0.1, 10);
   await run("ffmpeg", ["-v", "error", "-y", "-ss", at.toFixed(2), "-i", file, "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", to]);
+}
+
+/** A music file's cover art, as a still like thumbnail()'s. */
+export async function cover(file: string, to: string): Promise<void> {
+  await run("ffmpeg", ["-v", "error", "-y", "-i", file, "-map", "0:v:0", "-frames:v", "1", "-vf", "scale=640:-2", "-q:v", "4", to]);
 }
 
 export const MIME: Record<string, string> = {

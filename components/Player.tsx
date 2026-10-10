@@ -5,8 +5,8 @@ import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
 import { setListen } from "@/lib/api";
 import { formatAgo, formatDuration, formatHeight, formatSize } from "@/lib/format";
-import type { Video } from "@/lib/types";
-import { IconBack, IconCast, IconExternal, IconFilm, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconWarn } from "./icons";
+import { isAudio, type Video } from "@/lib/types";
+import { IconBack, IconCast, IconExternal, IconHeadphones, IconNext, IconPause, IconPlay, IconPrevious, IconStill, IconWarn } from "./icons";
 import { type NowPlaying, type Queue, useNowPlaying } from "./NowPlaying";
 import NowPlayingWidget from "./NowPlayingWidget";
 import ShareButton from "./ShareLinks";
@@ -25,7 +25,7 @@ const KEYS_HELP = "Space or K play/pause · J/L −/+10s · ←/→ −/+5s · F
  * The player page: the video, picking up where it was left, and what else was
  * watched lately (or what's next in its playlist). In listen mode the now
  * playing layer (components/NowPlaying.tsx) plays it instead, and this page
- * drives that.
+ * drives that. Music (a file with no video) is always in listen mode.
  */
 export default function Player({ video: v, others, playlist }: { video: Video; others: Video[]; playlist?: Queue }) {
   const router = useRouter();
@@ -36,7 +36,8 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   // While it plays on a TV (useCast), which keeps the server told where it is instead.
   const casting = useRef(false);
   // Listen mode (docs/pages.md#listen-mode): the layer plays the audio alone, which keeps playing from page to page, and with a phone's screen off.
-  const [listen, setListenState] = useState(!!v.listen);
+  const music = isAudio(v);
+  const [listen, setListenState] = useState(!!v.listen || music);
   const [listenError, setListenError] = useState<string | null>(null);
   // A hand-over between the page's video and the layer: where the one taking over starts (null: its saved place).
   const start = useRef<Start | null>(null);
@@ -58,7 +59,22 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   // The listeners below are set up once per video, so they read these through refs.
   const nav = useRef({ next: "", prev: "" });
   nav.current = { next: next ? hrefOf(next) : "", prev: prev ? hrefOf(prev) : "" };
-  const cast = useCast({ video: v, el: ref, casting, onEnded: () => nav.current.next && setUpNext(UP_NEXT_S) });
+  const cast = useCast({
+    video: v,
+    // The layer's audio, in listen mode, only once it's this one's.
+    local: () => (listen ? (mine ? audio.current : null) : ref.current),
+    listen,
+    casting,
+    onEnded: () => nav.current.next && setUpNext(UP_NEXT_S),
+    // In listen mode the TV takes the layer's place, and gives it back, paused, where it was.
+    onCasting: (on, at) => {
+      if (!listen) return;
+      if (on) now.stop();
+      else now.listen(v, queue, { time: at ?? undefined, playing: false });
+    },
+  });
+  const castRef = useRef(cast);
+  castRef.current = cast;
 
   useEffect(() => {
     if (upNext === null) return;
@@ -133,6 +149,14 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
       if (to !== null) {
         e.preventDefault();
         if (to) router.push(to);
+        return;
+      }
+      // Listening on a TV: the layer's empty, so Space and K are the TV's.
+      if (listening.current && castRef.current.device) {
+        if (e.key === " " || e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          castRef.current.playOrPause();
+        }
         return;
       }
       const seek = (by: number) => {
@@ -236,8 +260,9 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
         <section className="stage">
           {listen ? (
             <>
-              <div className="screen is-listening">{v.hasThumb ? <img src={thumbUrl(v)} alt="" /> : <IconHeadphones />}</div>
-              <ListenControls now={now} mine={mine} duration={v.duration} inPlaylist={!!playlist} />
+              <div className="screen is-listening">{v.hasThumb ? <img src={thumbUrl(v)} alt="" /> : music ? <IconStill audio /> : <IconHeadphones />}</div>
+              {/* On a TV the layer's empty: the notice below has its play button. */}
+              {!cast.device && <ListenControls now={now} mine={mine} duration={v.duration} inPlaylist={!!playlist} />}
             </>
           ) : (
             <div className="screen">
@@ -261,6 +286,11 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               <span>
                 Playing on <strong>{cast.device}</strong>
               </span>
+              {listen && (
+                <button type="button" className="btn btn-small" onClick={cast.playOrPause}>
+                  {cast.paused ? <IconPlay /> : <IconPause />} {cast.paused ? "Play" : "Pause"}
+                </button>
+              )}
               <button type="button" className="btn btn-quiet btn-small" onClick={cast.toggle}>
                 Stop casting
               </button>
@@ -291,7 +321,9 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
           {(lost || (!v.playable && !listen)) && (
             <p className="notice is-error" role="alert">
               <IconWarn />
-              {lost && listen
+              {lost && music
+                ? "This browser couldn’t play it. It’s still in the library: download it to play it elsewhere."
+                : lost && listen
                 ? "Its audio couldn’t be played: it may have none, or the server couldn’t take it out. Turn listen mode off to play the video."
                 : failed
                 ? `This browser can’t play it (${v.videoCodec ?? "unknown codec"}). It’s still in the library; another browser, or a re-download, may do.`
@@ -302,9 +334,9 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
           <div className="watch-info">
             <h1 className="watch-title">{v.title}</h1>
             <p className="watch-meta">
-              {v.source === "youtube" ? (v.channel ?? "YouTube") : (v.originalName?.split("/").pop() ?? "File")}
+              {v.source === "youtube" ? (v.channel ?? "YouTube") : music && v.channel ? v.channel : (v.originalName?.split("/").pop() ?? "File")}
               {" · "}
-              {v.playCount ? `watched ${v.playCount}×` : "not watched yet"}
+              {v.playCount ? `${music ? "played" : "watched"} ${v.playCount}×` : music ? "not played yet" : "not watched yet"}
               {v.lastPlayedAt ? ` · last ${formatAgo(v.lastPlayedAt)}` : ""}
               {" · added "}
               {formatAgo(v.addedAt)}
@@ -322,16 +354,20 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             </p>
             <div className="watch-actions">
               <ShareButton of={{ videoId: v.id }} title={v.title} />
-              <button
-                type="button"
-                className={`btn btn-small ${listen ? "is-on" : ""}`}
-                onClick={toggleListen}
-                aria-pressed={listen}
-                title="Play its audio alone, which keeps playing with the screen off"
-              >
-                <IconHeadphones /> Listen
-              </button>
-              {cast.available && !listen && (
+              {!music && (
+                <button
+                  type="button"
+                  className={`btn btn-small ${listen ? "is-on" : ""}`}
+                  onClick={toggleListen}
+                  aria-pressed={listen}
+                  // The TV plays the video or the audio it was given: switching is for after.
+                  disabled={!!cast.device}
+                  title={cast.device ? "Stop casting to switch listen mode" : "Play its audio alone, which keeps playing with the screen off"}
+                >
+                  <IconHeadphones /> Listen
+                </button>
+              )}
+              {cast.available && (
                 <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
                   <IconCast /> {cast.device ? "Casting" : "Cast"}
                 </button>
@@ -368,7 +404,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                 <li key={o.id}>
                   <Link href={hrefOf(o)} className={`other ${o.id === v.id ? "is-current" : ""}`} aria-current={o.id === v.id ? "true" : undefined}>
                     <span className="other-thumb">
-                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconFilm />}
+                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
                       {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
                     </span>
                     <span className="other-text">
@@ -390,7 +426,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                 <li key={o.id}>
                   <Link href={`/v/${o.id}`} className="other">
                     <span className="other-thumb">
-                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconFilm />}
+                      {o.hasThumb ? <img src={thumbUrl(o)} alt="" loading="lazy" /> : <IconStill audio={isAudio(o)} />}
                       {o.duration > 0 && <span className="duration">{formatDuration(o.duration)}</span>}
                     </span>
                     <span className="other-text">

@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { unique, upload } from "./helpers";
+import { MUSIC, unique, upload } from "./helpers";
 
 const PASSWORD = "correct horse battery";
 
@@ -150,5 +150,27 @@ test("a playlist link plays the playlist as it is, one after another, and nothin
   } finally {
     await stranger.close();
     await request.post("/api/auth", { data: { action: "remove", current: PASSWORD } });
+  }
+});
+
+test("a music link plays it under its cover, with the browser's audio controls", async ({ request, browser }) => {
+  const m = await upload(request, `${unique("Shared tune")}.mp3`, MUSIC);
+  const share = (await (await request.post("/api/shares", { data: { video: m.id, expires: "1d" } })).json()) as { token: string };
+  const stranger = await browser.newContext();
+  try {
+    const page = await stranger.newPage();
+    await page.goto(`/s/${share.token}`);
+    await expect(page.locator(".watch-title")).toHaveText(m.title);
+    await expect(page.locator(".screen.is-listening img")).toBeVisible();
+    await expect(page.locator('meta[property="og:audio"]')).toHaveAttribute("content", new RegExp(`/api/s/${share.token}/file$`));
+    const audio = page.locator("audio.shared-audio");
+    await expect(audio).toHaveAttribute("src", `/api/s/${share.token}/file`);
+    await audio.evaluate((el: HTMLAudioElement) => {
+      el.muted = true;
+      return el.play();
+    });
+    await expect.poll(() => audio.evaluate((el: HTMLAudioElement) => el.currentTime)).toBeGreaterThan(0.5);
+  } finally {
+    await stranger.close();
   }
 });
