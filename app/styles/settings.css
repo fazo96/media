@@ -1,0 +1,169 @@
+/* ─── Settings, and the unlock page ──────────────────────── */
+.settings,
+.page {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px max(var(--gutter), env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(var(--gutter), env(safe-area-inset-left));
+}
+
+.settings-section {
+  padding: 20px 0;
+  border-bottom: 1px solid var(--rule);
+}
+
+.settings-section:last-child {
+  border-bottom: 0;
+}
+
+.settings-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--ink-soft);
+}
+
+.settings-state {
+  margin-left: auto;
+  font: 500 var(--text-label) var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--ink-faint);
+}
+
+.settings-state.is-locked {
+  color: var(--ok);
+}
+
+.settings-text {
+  margin: 10px 0 14px;
+  color: var(--ink-soft);
+  font-size: 14px;
+}
+
+.settings-hint {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-faint);
+}
+
+.settings-warn {
+  color: var(--danger);
+}
+
+.settings-notice {
+  margin: 12px 0 0;
+  font-size: 14px;
+  color: var(--ok);
+}
+
+.settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-form {
+  display: grid;
+  gap: 12px;
+  max-width: 380px;
+}
+
+.field {
+  display: grid;
+  gap: 6px;
+}
+
+.field input {
+  height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--rule);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.field input:focus {
+  outline: 0;
+  border-color: var(--accent);
+}
+
+.field input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
+.welcome-error {
+  margin: 12px 0 0;
+  color: var(--danger);
+  font-size: 14px;
+}
+
+/* The tools the server runs. */
+.tools {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.tool {
+  padding: 12px 14px;
+  border: 1px solid var(--rule);
+  border-left: 3px solid var(--ok);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.tool.is-missing {
+  border-left-color: var(--danger);
+}
+
+.tool dt {
+  font: 600 14px var(--font-mono);
+}
+
+.tool-version {
+  margin-left: 6px;
+  font-weight: 400;
+  color: var(--ink-faint);
+}
+
+.tool dd {
+  display: grid;
+  gap: 4px;
+  margin: 4px 0 0;
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.tool-command {
+  color: var(--ink-faint);
+  overflow-wrap: anywhere;
+}
+
+.tool-error {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--danger);
+}
+
+.tool-error svg {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* The unlock page. */
+.welcome {
+  margin-top: 12vh;
+}
+
+.welcome-title {
+  margin: 8px 0;
+  font-size: 26px;
+  letter-spacing: -0.01em;
+}
+
+.welcome-lede {
+  margin: 0 0 20px;
+  color: var(--ink-soft);
+}

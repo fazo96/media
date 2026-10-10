@@ -1,0 +1,13 @@
+# Tests
+
+## Unit tests
+
+`npm test` runs `tests/**/*.test.ts` with Node's built-in runner (Node strips the types: no `enum` or parameter properties in modules tests load). `tests/setup.mjs` runs first: it points `MEDIA_DIR` at a fresh temporary folder (without it `lib/paths.ts` would use `./data`) and registers `tests/hooks.mjs`, which resolves `@/`, extensionless imports and an empty `server-only`, so server modules load. `tests/library.test.ts` runs real ffmpeg on `tests/fixtures/clip.mp4` (a generated 30-second test pattern, 227 KB) and skips without it.
+
+`npm run typecheck` runs `tsc --noEmit`; `npm run lint` runs Biome's linter (`biome.jsonc`: recommended rules minus the ones listed there with why; formatting left alone). CI (`.github/workflows/ci.yml`) runs lint, typecheck, unit tests and a build, and the browser tests in a job of their own.
+
+## Browser tests
+
+`nix develop .#e2e --command npm run test:e2e` runs `e2e/` with Playwright (`playwright.config.ts`; the `e2e` shell provides nixpkgs' Chromium as `MEDIA_E2E_CHROMIUM`, which plays H.264; CI uses Google Chrome for the same reason, since Playwright's own Chromium has no H.264). It starts `next dev` on :3101 over a temporary library, one test at a time, so stop any `next dev` of yours in this checkout first. `MEDIA_E2E_URL` points it at a running server instead.
+
+YouTube is never reached: `MEDIA_YTDLP` is `e2e/stub-yt-dlp.mjs`, which prints progress the way `lib/downloads.ts` asks for it and "downloads" the fixture clip, titled `Stub video <id>`. The id `unavailable` fails like a removed video. `e2e/api.spec.ts` covers the routes without a browser. Add a test there for a new flow.

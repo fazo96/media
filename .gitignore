@@ -1,0 +1,9 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+# the library itself lives here; keep it out of the code repo
+data/
+# Playwright (npm run test:e2e)
+/test-results/
+/playwright-report/
