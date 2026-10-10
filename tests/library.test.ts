@@ -3,7 +3,7 @@ import { execFileSync } from "node:child_process";
 import { copyFile, readdir, stat } from "node:fs/promises";
 import path from "node:path";
 import { test } from "node:test";
-import { addVideo, audioFile, getVideo, incomingDir, listVideos, NotAVideo, trashVideo, updateVideo, videoFile, withListen } from "../lib/library.ts";
+import { addVideo, audioFile, convertToMusic, getVideo, incomingDir, listVideos, NotAVideo, trashVideo, updateVideo, videoFile, withListen } from "../lib/library.ts";
 import { TRASH_DIR } from "../lib/paths.ts";
 import { isAudio } from "../lib/types.ts";
 import { FIXTURE, hasFfmpeg } from "./helpers.ts";
@@ -253,4 +253,46 @@ test("a video without audio can't be added as music", { skip: !hasFfmpeg }, asyn
   const silent = path.join(await incomingDir(), "silent.mp4");
   execFileSync("ffmpeg", ["-v", "error", "-i", FIXTURE, "-an", "-c", "copy", silent]);
   await assert.rejects(addVideo(silent, { title: "Silent Song", source: "file", originalName: "silent.mp4" }, { music: true }), NotAVideo);
+});
+
+test("a video turned into music keeps its audio alone, its still and its watching; the video goes to the trash", { skip: !hasFfmpeg }, async () => {
+  const v = await addVideo(await incoming("upload.mp4"), { title: "Turn Me", source: "file", originalName: "Turn Me.mp4" });
+  await updateVideo(v.id, (x) => ({ ...x, playCount: 3, position: 12 }));
+  // Listen mode's file, made already, is the one kept.
+  const listenFile = await audioFile(v);
+  // Two asks at once are one conversion.
+  const [music, same] = await Promise.all([convertToMusic(v.id), convertToMusic(v.id)]);
+  assert.deepEqual(same, music);
+  assert.ok(music);
+  assert.equal(music.file, "track.m4a");
+  assert.equal(music.mime, "audio/mp4");
+  assert.equal(music.audioCodec, "aac");
+  assert.equal(music.videoCodec, undefined);
+  assert.equal(music.width, undefined);
+  assert.equal(music.listen, true);
+  assert.equal(music.playable, true);
+  assert.equal(music.hasThumb, true);
+  assert.equal(music.playCount, 3);
+  assert.equal(music.position, 12);
+  assert.equal(music.addedAt, v.addedAt);
+  assert.ok(isAudio(music));
+  assert.equal((await stat(videoFile(music))).size, music.size);
+  assert.deepEqual((await readdir(path.dirname(videoFile(music)))).sort(), ["meta.json", "thumb.jpg", "track.m4a"]);
+  await assert.rejects(stat(listenFile as string));
+  const trashed = (await readdir(TRASH_DIR)).filter((n) => n.startsWith(`${v.id}.`));
+  assert.equal(trashed.length, 1);
+  assert.deepEqual(await readdir(path.join(TRASH_DIR, trashed[0])), ["video.mp4"]);
+  // It plays as music: its audio file is itself.
+  assert.equal(await audioFile(music), videoFile(music));
+
+  await assert.rejects(convertToMusic(v.id), (e: unknown) => (e as { status?: number }).status === 400);
+  assert.equal(await convertToMusic("not-there"), null);
+});
+
+test("a video without audio can't be turned into music", { skip: !hasFfmpeg }, async () => {
+  const silent = path.join(await incomingDir(), "silent.mp4");
+  execFileSync("ffmpeg", ["-v", "error", "-i", FIXTURE, "-an", "-c", "copy", silent]);
+  const v = await addVideo(silent, { title: "Silent Turn", source: "file", originalName: "silent.mp4" });
+  await assert.rejects(convertToMusic(v.id), NotAVideo);
+  assert.equal((await getVideo(v.id))?.file, "video.mp4");
 });

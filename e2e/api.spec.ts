@@ -272,3 +272,20 @@ test("adding as music and into playlists: a download, an upload, a whole YouTube
   expect(whole.playlists[0].items.slice(2)).toEqual(whole.playlist.items);
   for (const j of whole.jobs) await request.delete(`/api/jobs/${j.id}`);
 });
+
+test("a video turned into music: its audio alone, once", async ({ request }) => {
+  const v = await upload(request, `${unique("Turn")}.mp4`);
+  const res = await request.post(`/api/videos/${v.id}/music`);
+  expect(res.status()).toBe(200);
+  const music = await res.json();
+  expect(music.id).toBe(v.id);
+  expect(music.file).toBe("track.m4a");
+  expect(music.videoCodec).toBeUndefined();
+  expect(music.listen).toBe(true);
+  const file = await request.get(`/api/videos/${v.id}/file`, { headers: { Range: "bytes=0-1" } });
+  expect(file.status()).toBe(206);
+  expect(file.headers()["content-type"]).toBe("audio/mp4");
+  expect((await request.post(`/api/videos/${v.id}/music`)).status()).toBe(400);
+  expect((await request.post("/api/videos/not-there/music")).status()).toBe(404);
+  await request.delete(`/api/videos/${v.id}`);
+});

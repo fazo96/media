@@ -288,6 +288,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           playlists={playlists}
           onPlaylistChanged={keepPlaylist}
           onRemoved={lib.dropVideo}
+          onChanged={lib.keepVideo}
           onPickAll={() => setSelected(order)}
           onCancel={stopPicking}
           onError={say}

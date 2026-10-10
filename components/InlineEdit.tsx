@@ -25,8 +25,14 @@ export function Rename({ initial, label, onSave, onDone }: { initial: string; la
   );
 }
 
-/** "Delete it?", with the button that does it and one that doesn't. */
-export function Confirm({ question, action = "Delete", onConfirm, onCancel }: { question: string; action?: string; onConfirm: () => void; onCancel: () => void }) {
+/** "Delete it?", with the button that does it and one that doesn't (`cancel`). */
+export function Confirm({
+  question,
+  action = "Delete",
+  cancel = "Keep",
+  onConfirm,
+  onCancel,
+}: { question: string; action?: string; cancel?: string; onConfirm: () => void; onCancel: () => void }) {
   return (
     <span className="confirm">
       <span>{question}</span>
@@ -34,7 +40,7 @@ export function Confirm({ question, action = "Delete", onConfirm, onCancel }: { 
         {action}
       </button>
       <button type="button" className="btn btn-quiet btn-small" onClick={onCancel}>
-        Keep
+        {cancel}
       </button>
     </span>
   );

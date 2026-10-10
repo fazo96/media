@@ -368,3 +368,28 @@ test("a YouTube search result is added as music", async ({ page, request }) => {
   expect(v.listen).toBe(true);
   expect(v.hasThumb).toBe(true);
 });
+
+test("a video turned into music from its card, and several from the selection", async ({ page, request }) => {
+  const one = await upload(request, `${unique("Card Turn")}.mp4`);
+  const two = await upload(request, `${unique("Pick Turn")}.mp4`);
+  const three = await upload(request, `${unique("Pick Turn")}.mp4`);
+  await page.goto("/");
+  const card = page.locator(`[data-video="${one.id}"]`);
+  await card.getByRole("button", { name: /^More for/ }).click();
+  await page.getByRole("menuitem", { name: "Keep the audio only…" }).click();
+  await expect(card).toContainText("Keep only its audio?");
+  await card.getByRole("button", { name: "Audio only" }).click();
+  await expect(card.locator(".thumb.is-music")).toBeVisible({ timeout: 30_000 });
+  // Music has nothing to turn into music.
+  await card.getByRole("button", { name: /^More for/ }).click();
+  await expect(page.getByRole("menuitem", { name: "Keep the audio only…" })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Select", exact: true }).click();
+  for (const v of [two, three]) await page.locator(`[data-video="${v.id}"] a.thumb`).click();
+  const bar = page.getByRole("region", { name: "Selection" });
+  await bar.getByRole("button", { name: "Audio only" }).click();
+  await expect(bar).toContainText("Keep only the audio of 2?");
+  await bar.getByRole("button", { name: "Audio only" }).click();
+  for (const v of [two, three]) await expect(page.locator(`[data-video="${v.id}"] .thumb.is-music`)).toBeVisible({ timeout: 30_000 });
+});

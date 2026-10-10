@@ -279,3 +279,28 @@ test("music plays in listen mode, its cover for a still, with no way out of it",
   await expect.poll(async () => (await videoOf(request, m.id)).playCount).toBe(1);
   await expect.poll(() => page.evaluate(() => navigator.mediaSession.metadata?.artist)).toBe("The Testers");
 });
+
+test("Audio only on the player: asked first, then the page comes back as music, where it was", async ({ page, request }) => {
+  const v = await upload(request, `${unique("Player Turn")}.mp4`);
+  await page.goto(`/v/${v.id}`);
+  const video = page.locator(".screen video");
+  await video.evaluate((el: HTMLVideoElement) => {
+    el.muted = true;
+    el.currentTime = 8;
+    return el.play();
+  });
+  await expect.poll(() => video.evaluate((el: HTMLVideoElement) => el.currentTime)).toBeGreaterThan(8);
+  await page.getByRole("button", { name: "Audio only" }).click();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await expect(page.locator(".confirm")).toHaveCount(0);
+  await page.getByRole("button", { name: "Audio only" }).click();
+  await page.locator(".confirm").getByRole("button", { name: "Audio only" }).click();
+  // Music now: the layer plays it, with no Listen or Audio only.
+  await expect(page.locator(".screen video")).toHaveCount(0, { timeout: 30_000 });
+  await expect(layerOf(page)).toHaveAttribute("src", `/api/videos/${v.id}/audio`);
+  await expect(page.getByRole("button", { name: "Listen" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Audio only" })).toHaveCount(0);
+  const music = await videoOf(request, v.id);
+  expect(music.file).toBe("track.m4a");
+  expect(music.position).toBeGreaterThan(7);
+});

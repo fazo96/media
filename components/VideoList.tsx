@@ -8,7 +8,7 @@ import { playerHref, thumbUrl } from "@/lib/urls";
 import { IconWarn } from "./icons";
 import { Confirm, Rename } from "./InlineEdit";
 import { Still } from "./MediaRow";
-import { useVideoActions } from "./useVideoActions";
+import { TO_MUSIC, useVideoActions } from "./useVideoActions";
 import { type Pick, PickBox } from "./VideoCard";
 import VideoMenu from "./VideoMenu";
 
@@ -80,7 +80,7 @@ export default function VideoList({ videos, picked, onPick, onPickAll, onRedownl
 }
 
 function VideoRow({ video: v, onRemoved, onChanged, onRedownload, playlists, onPlaylistChanged, pick }: RowProps) {
-  const { mode, setMode, error, setError, rename, remove } = useVideoActions(v, { onRemoved, onChanged });
+  const { mode, setMode, error, setError, rename, remove, toMusic } = useVideoActions(v, { onRemoved, onChanged });
   const from = sourceLabel(v);
 
   return (
@@ -109,6 +109,12 @@ function VideoRow({ video: v, onRemoved, onChanged, onRedownload, playlists, onP
             {/* On a phone, where the channel's column goes. */}
             <span className="list-sub">{from}</span>
             {mode === "delete" && <Confirm question="Move to the trash?" onConfirm={remove} onCancel={() => setMode("idle")} />}
+            {mode === "music" && <Confirm {...TO_MUSIC} onConfirm={toMusic} onCancel={() => setMode("idle")} />}
+            {mode === "converting" && (
+              <span className="card-meta" role="status">
+                Keeping the audio…
+              </span>
+            )}
             {error && (
               <span className="card-meta is-error" role="alert">
                 {error}
@@ -131,6 +137,7 @@ function VideoRow({ video: v, onRemoved, onChanged, onRedownload, playlists, onP
           onPlaylistChanged={onPlaylistChanged}
           onRename={() => setMode("rename")}
           onRedownload={onRedownload}
+          onToMusic={() => setMode("music")}
           onDelete={() => setMode("delete")}
           onError={setError}
         />

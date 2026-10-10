@@ -7,7 +7,7 @@ import { playerHref, thumbUrl } from "@/lib/urls";
 import { IconWarn } from "./icons";
 import { Confirm, Rename } from "./InlineEdit";
 import { Still } from "./MediaRow";
-import { useVideoActions } from "./useVideoActions";
+import { TO_MUSIC, useVideoActions } from "./useVideoActions";
 import VideoMenu from "./VideoMenu";
 
 /** Picking videos for a bulk action: whether this one's picked, and picking it (`range`: Shift was held). */
@@ -44,7 +44,7 @@ export function PickBox({ pick, title }: { pick: Pick; title: string }) {
 
 /** One video in the grid: its still, how far it was watched, and a menu. */
 export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload, playlists, onPlaylistChanged, pick }: Props) {
-  const { mode, setMode, error, setError, rename, remove } = useVideoActions(v, { onRemoved, onChanged });
+  const { mode, setMode, error, setError, rename, remove, toMusic } = useVideoActions(v, { onRemoved, onChanged });
 
   const watched = v.duration > 0 && v.position > 0 ? Math.min(1, v.position / v.duration) : 0;
   const meta = [sourceLabel(v), playsLabel(v), v.lastPlayedAt ? formatAgo(v.lastPlayedAt) : null].filter(Boolean).join(" · ");
@@ -85,6 +85,12 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
         )}
         {mode === "delete" ? (
           <Confirm question="Move to the trash?" onConfirm={remove} onCancel={() => setMode("idle")} />
+        ) : mode === "music" ? (
+          <Confirm {...TO_MUSIC} onConfirm={toMusic} onCancel={() => setMode("idle")} />
+        ) : mode === "converting" ? (
+          <p className="card-meta" role="status">
+            Keeping the audio…
+          </p>
         ) : (
           // "5 min ago" can tick over between the server's render and the browser's: either will do.
           <p className="card-meta" suppressHydrationWarning>
@@ -103,6 +109,7 @@ export default function VideoCard({ video: v, onRemoved, onChanged, onRedownload
         onPlaylistChanged={onPlaylistChanged}
         onRename={() => setMode("rename")}
         onRedownload={onRedownload}
+        onToMusic={() => setMode("music")}
         onDelete={() => setMode("delete")}
         onError={setError}
       />

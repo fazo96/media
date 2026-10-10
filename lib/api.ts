@@ -152,3 +152,6 @@ export const listJobs = () => api<Job[]>("/api/jobs");
 
 /** Cancel a job under way, or forget one that ended. */
 export const dismissJob = (id: string) => apiDelete(`/api/jobs/${id}`);
+
+/** Keep only a video's audio: it becomes music (seconds, or a minute when its audio is converted). */
+export const convertToMusic = (id: string) => api<Video>(`/api/videos/${id}/music`, { method: "POST" });

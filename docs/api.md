@@ -7,6 +7,7 @@
 | `GET/PATCH/DELETE /api/videos/<id>` | One video; `{ title?, listen? }`: rename, turn [listen mode](library.md#listen-mode) on or off; move to the trash |
 | `GET/HEAD /api/videos/<id>/file` | The video, with `Range` support (206, 416; `lib/range.ts`) |
 | `GET/HEAD /api/videos/<id>/audio` | Its audio alone, for [listen mode](library.md#listen-mode) (`audio/mp4`, or `audio/webm` for Vorbis): made on the first request, which waits for it (seconds; a minute to convert), then as `file`. 404 when it has no audio. For music, its file (`listenMime()` in `lib/types.ts`) |
+| `POST /api/videos/<id>/music` | Keep only its audio: the video [turns into music](library.md#a-video-turned-into-music), its video file to the trash. Answers when done (seconds; a minute when the audio is converted) with the music; 400 for music already, 415 without audio |
 | `GET /api/videos/<id>/thumb` | The still (the page adds `?v=<addedAt>` so a re-download's isn't hidden by the cache) |
 | `POST /api/videos/<id>/progress` | `{ position, started?, ended? }`: `started` counts a play, `ended` resets the position. Read as text, so `sendBeacon` works |
 | `GET/POST /api/jobs`, `DELETE /api/jobs/<jid>` | YouTube downloads ([downloads](downloads.md)) and imports from Transmission ([transmission](transmission.md)): listed, cancelled and dismissed alike. A download: `{ url, replace?, music?, playlists? }`, 202 `{ job, playlists }`, or `{ video, playlists }` when it's in the library (`playlists` in the answer: the ones it went into, at once) |

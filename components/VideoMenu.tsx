@@ -2,7 +2,7 @@
 
 import { useCallback, useRef, useState } from "react";
 import { isAudio, type Playlist, type Video } from "@/lib/types";
-import { IconEdit, IconExternal, IconFilm, IconHeadphones, IconMore, IconPlaylist, IconRefresh, IconTrash } from "./icons";
+import { IconEdit, IconExternal, IconFilm, IconHeadphones, IconMore, IconMusic, IconPlaylist, IconRefresh, IconTrash } from "./icons";
 import PlaylistPicker from "./PlaylistPicker";
 import { useDismiss } from "./useDismiss";
 
@@ -13,12 +13,14 @@ type Props = {
   onRename: () => void;
   /** Download a YouTube one again: as music, or as a video. */
   onRedownload: (music: boolean) => void;
+  /** Keep only its audio (a video's menu): asks first. */
+  onToMusic: () => void;
   onDelete: () => void;
   onError: (message: string) => void;
 };
 
-/** A video's ⋯ menu: rename, its playlists, download again or open a YouTube one, delete. */
-export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRename, onRedownload, onDelete, onError }: Props) {
+/** A video's ⋯ menu: rename, its playlists, download again or open a YouTube one, keep its audio only, delete. */
+export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRename, onRedownload, onToMusic, onDelete, onError }: Props) {
   // The menu, or its second page: the playlists.
   const [menu, setMenu] = useState<false | "main" | "playlists">(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -67,6 +69,11 @@ export default function VideoMenu({ video: v, playlists, onPlaylistChanged, onRe
                 <IconExternal /> Open on YouTube
               </a>
             </>
+          )}
+          {!isAudio(v) && (
+            <button type="button" role="menuitem" onClick={pick(onToMusic)}>
+              <IconMusic /> Keep the audio only…
+            </button>
           )}
           <button type="button" role="menuitem" className="is-danger" onClick={pick(onDelete)}>
             <IconTrash /> Delete

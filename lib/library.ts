@@ -8,7 +8,7 @@ import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
 import { HttpError } from "./errors";
 import { cover, extractAudio, remux, thumbnail } from "./ffmpeg";
-import { audioExt, audioLanguages, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, probe } from "./probe";
+import { audioExt, audioLanguages, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, playsIn, probe } from "./probe";
 import { isAudio, listenContainer, type Video } from "./types";
 
 // The library on disk (docs/library.md): one folder per video (or music
@@ -265,3 +265,50 @@ export function audioFile(v: Video): Promise<string | null> {
   return job;
 }
 
+
+/** Conversions under way, by video id: a second ask waits for the first. */
+const converting = new Map<string, Promise<Video | null>>();
+
+/**
+ * Keep only a video's audio: it becomes music (docs/library.md#a-video-turned-into-music).
+ * The track is listen mode's (`audioFile()`, reused when it's made already),
+ * moved in as `track.<ext>`; the video file goes to the trash. Its id, still,
+ * watching and playlists stay. Null when there's no such video; a 400 for
+ * music already, a 415 for a video without audio.
+ */
+export function convertToMusic(id: string): Promise<Video | null> {
+  let job = converting.get(id);
+  if (!job) {
+    job = toMusic(id).finally(() => converting.delete(id));
+    converting.set(id, job);
+  }
+  return job;
+}
+
+async function toMusic(id: string): Promise<Video | null> {
+  const v = await readMeta(id);
+  if (!v) return null;
+  if (isAudio(v)) throw new HttpError(400, "That’s music already.");
+  const audio = await audioFile(v);
+  if (!audio) throw new NotAVideo("It has no audio to keep.");
+  const container = listenContainer(v.audioCodec);
+  const name = `track.${audioExt(container)}`;
+  // The track first, then meta.json pointing at it, then the video to the trash: stopped anywhere, it still plays.
+  await rename(audio, path.join(videoDir(id), name));
+  const size = (await stat(path.join(videoDir(id), name))).size;
+  const next = await updateVideo(id, ({ videoCodec: _v, width: _w, height: _h, ...rest }) => ({
+    ...rest,
+    file: name,
+    mime: `audio/${container}`,
+    size,
+    // What audioFile() wrote: the track copied, or converted to AAC where it couldn't be.
+    audioCodec: v.audioCodec && playsIn(container, v.audioCodec) ? v.audioCodec : "aac",
+    playable: true,
+    listen: true,
+  }));
+  const trash = path.join(TRASH_DIR, `${id}.${Date.now()}`);
+  await mkdir(trash, { recursive: true });
+  await unlessMissing(() => rename(path.join(videoDir(id), v.file), path.join(trash, v.file)));
+  refreshBrowse();
+  return next;
+}

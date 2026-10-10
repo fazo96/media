@@ -3,11 +3,12 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
-import { setListen } from "@/lib/api";
+import { convertToMusic, errorMessage, setListen } from "@/lib/api";
 import { formatDuration, sourceLabel } from "@/lib/format";
 import { isAudio, type Video } from "@/lib/types";
 import { playerHref, thumbUrl } from "@/lib/urls";
-import { IconCast, IconHeadphones, IconNext, IconPause, IconPlay, IconStill, IconWarn } from "./icons";
+import { IconCast, IconHeadphones, IconMusic, IconNext, IconPause, IconPlay, IconStill, IconWarn } from "./icons";
+import { Confirm } from "./InlineEdit";
 import ListenControls from "./ListenControls";
 import MediaRow, { Still } from "./MediaRow";
 import Notice from "./Notice";
@@ -17,6 +18,7 @@ import Topbar, { toLibrary } from "./Topbar";
 import { useCast } from "./useCast";
 import { useMediaSession } from "./useMediaSession";
 import { type Start, usePlayback } from "./usePlayback";
+import { TO_MUSIC } from "./useVideoActions";
 import { KEYS_HELP, usePlayerKeys } from "./usePlayerKeys";
 import { usePlaylistNav } from "./usePlaylistNav";
 import WatchInfo from "./WatchInfo";
@@ -149,6 +151,21 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     }
   };
 
+  // Keeping the audio only: asked first, then the video stops (its place saved) and the page comes back as music.
+  const [toMusic, setToMusic] = useState<"idle" | "ask" | "converting">("idle");
+  const keepAudio = async () => {
+    setToMusic("converting");
+    setListenError(null);
+    ref.current?.pause();
+    try {
+      await convertToMusic(v.id);
+      router.refresh();
+    } catch (err) {
+      setListenError(errorMessage(err));
+      setToMusic("idle");
+    }
+  };
+
   // The video's notification; in listen mode, the layer has its own.
   useMediaSession(ref, {
     enabled: !listen,
@@ -262,6 +279,18 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                     <IconHeadphones /> Listen
                   </button>
                 )}
+                {!music && (
+                  <button
+                    type="button"
+                    className="btn btn-small"
+                    onClick={() => setToMusic("ask")}
+                    // The TV is playing the video file: it would lose it.
+                    disabled={!!cast.device || toMusic === "converting"}
+                    title={cast.device ? "Stop casting first" : "Keep only its audio: it becomes music, and the video goes to the trash"}
+                  >
+                    <IconMusic /> Audio only
+                  </button>
+                )}
                 {cast.available && (
                   <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
                     <IconCast /> {cast.device ? "Casting" : "Cast"}
@@ -270,6 +299,12 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
               </>
             }
           >
+            {toMusic === "ask" && <Confirm {...TO_MUSIC} onConfirm={() => void keepAudio()} onCancel={() => setToMusic("idle")} />}
+            {toMusic === "converting" && (
+              <p className="resumed" role="status">
+                Keeping the audio…
+              </p>
+            )}
             {listenError && (
               <Notice error>
                 <IconWarn />
