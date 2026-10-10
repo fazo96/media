@@ -4,6 +4,7 @@ import { rm, stat } from "node:fs/promises";
 import path from "node:path";
 import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
+import { HttpError } from "./errors";
 import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, incomingDir, listVideos } from "./library";
 import { appendOrCreate, updatePlaylist } from "./playlists";
@@ -18,17 +19,15 @@ import { isActive, type Job, type Torrent, type TorrentFile, type TorrentJob, ty
 const rpcUrl = () => process.env.MEDIA_TRANSMISSION_URL?.trim() || null;
 export const transmissionEnabled = () => rpcUrl() !== null;
 
-/** Transmission couldn't be reached, or said no. */
-export class TransmissionError extends Error {}
-
-/** An import that can't start: `status` is the answer (400, 404, 409). */
-export class ImportError extends Error {
-  status: number;
-  constructor(status: number, message: string) {
-    super(message);
-    this.status = status;
+/** Transmission couldn't be reached, or said no: a 502. */
+export class TransmissionError extends HttpError {
+  constructor(message: string) {
+    super(502, message);
   }
 }
+
+/** An import that can't start: `status` is the answer (400, 404, 409). */
+export class ImportError extends HttpError {}
 
 // DVD folders' .vob pieces aren't here: each is a slice of a disc, not a video.
 const VIDEO_EXT = new Set(["mp4", "m4v", "mkv", "webm", "mov", "avi", "wmv", "mpg", "mpeg", "ts", "m2ts", "mts", "flv", "ogv", "3gp"]);

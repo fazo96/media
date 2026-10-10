@@ -6,6 +6,7 @@ import { refreshBrowse } from "./browse";
 import { serially, writeAtomic } from "./files";
 import { isValidId, slugify } from "./ids";
 import { INCOMING_DIR, TRASH_DIR, VIDEOS_DIR } from "./paths";
+import { HttpError } from "./errors";
 import { cover, extractAudio, remux, thumbnail } from "./ffmpeg";
 import { audioExt, audioLanguages, MIME, type Probe, pickAudio, plan, planAudio, playedAsIs, probe } from "./probe";
 import { isAudio, listenContainer, type Video } from "./types";
@@ -101,7 +102,12 @@ async function claim(base: string): Promise<string> {
   throw new Error("no free id");
 }
 
-export class NotAVideo extends Error {}
+/** Neither video nor audio in it: a 415. */
+export class NotAVideo extends HttpError {
+  constructor(message: string) {
+    super(415, message);
+  }
+}
 
 type Details = Pick<Video, "title" | "source" | "originalName" | "youtubeId" | "url" | "channel" | "torrentHash" | "torrentName">;
 

@@ -24,7 +24,7 @@
 | `GET /api/storage` | `{ library, trash, free, total }` in bytes ([library](library.md#disk-usage)) |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 
-Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file, audio and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.
+Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file, audio and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`. An `HttpError` (`lib/errors.ts`) thrown from a handler, or from the library under it, is answered as `{ error }` with its status: `NotAVideo` 415, `ToolError` 500 (ffmpeg or yt-dlp failed, or isn't installed), `TransmissionError` 502, `ImportError` its own. `askYoutube()` gives yt-dlp a minute (504 after that, 502 when it fails). The `api/s/` routes are `shareRoute()` (`lib/serve.ts`): the shared video (or, under `v/<id>/`, the playlist link's one) or a 404, sent with `Access-Control-Allow-Origin: *`.
 
 ## The proxy and the upload
 

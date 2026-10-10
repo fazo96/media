@@ -1,6 +1,6 @@
 import { downloadPlaylist } from "@/lib/downloads";
 import { createPlaylist, listPlaylists } from "@/lib/playlists";
-import { badRequest, fail, noStore, readJson, route } from "@/lib/route";
+import { askYoutube, badRequest, noStore, readJson, route } from "@/lib/route";
 import { parsePlaylist } from "@/lib/youtube";
 
 export const dynamic = "force-dynamic";
@@ -18,13 +18,7 @@ export const POST = route(async (req) => {
   if (body?.youtube !== undefined) {
     const listId = typeof body.youtube === "string" ? parsePlaylist(body.youtube) : null;
     if (!listId) return badRequest("That isn’t a YouTube playlist.");
-    const timeout = AbortSignal.timeout(60_000);
-    try {
-      return Response.json(await downloadPlaylist(listId, AbortSignal.any([req.signal, timeout])), { status: 201 });
-    } catch (err) {
-      if (timeout.aborted) return fail(504, "YouTube took too long to answer.");
-      return fail(502, (err as Error).message);
-    }
+    return Response.json(await askYoutube(req, (signal) => downloadPlaylist(listId, signal)), { status: 201 });
   }
   const title = typeof body?.title === "string" ? body.title.trim().slice(0, 300) : "";
   if (!title) return badRequest("title required");

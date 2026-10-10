@@ -2,6 +2,7 @@ import "server-only";
 import { spawn } from "node:child_process";
 import { access, constants } from "node:fs/promises";
 import path from "node:path";
+import { HttpError } from "./errors";
 import type { ToolStatus } from "./types";
 
 // The programs media runs: yt-dlp to download, ffmpeg and ffprobe to read,
@@ -46,7 +47,12 @@ export function command(tool: Tool): Promise<string[] | null> {
   return found;
 }
 
-export class ToolError extends Error {}
+/** A tool failed, or isn't installed: a 500 with what it said. */
+export class ToolError extends HttpError {
+  constructor(message: string) {
+    super(500, message);
+  }
+}
 
 type RunOpts = { signal?: AbortSignal; onLine?: (line: string) => void };
 

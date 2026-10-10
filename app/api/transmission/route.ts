@@ -1,17 +1,12 @@
-import { badRequest, fail, noStore, notFound, readJson, route } from "@/lib/route";
-import { ImportError, importTorrent, isValidHash, listTorrents, TransmissionError, transmissionEnabled } from "@/lib/transmission";
+import { badRequest, noStore, notFound, readJson, route } from "@/lib/route";
+import { importTorrent, isValidHash, listTorrents, transmissionEnabled } from "@/lib/transmission";
 
 export const dynamic = "force-dynamic";
 
-/** The torrents in Transmission with a video in them, newest first. 404 when it isn't set up. */
+/** The torrents in Transmission with a video in them, newest first. 404 when it isn't set up; 502 when it can't be reached. */
 export const GET = route(async (req) => {
   if (!transmissionEnabled()) return notFound();
-  try {
-    return noStore({ torrents: await listTorrents(req.signal) });
-  } catch (err) {
-    if (err instanceof TransmissionError) return fail(502, err.message);
-    throw err;
-  }
+  return noStore({ torrents: await listTorrents(req.signal) });
 });
 
 /**
@@ -28,11 +23,5 @@ export const POST = route(async (req) => {
   if (!Array.isArray(files) || files.length === 0 || files.length > 10_000 || !files.every((i) => Number.isInteger(i) && i >= 0)) {
     return badRequest("Which files? (`files`: their indexes in the torrent)");
   }
-  try {
-    return Response.json({ job: await importTorrent(body.hash, files, body?.remove === true, body?.playlist === true) }, { status: 202 });
-  } catch (err) {
-    if (err instanceof ImportError) return fail(err.status, err.message);
-    if (err instanceof TransmissionError) return fail(502, err.message);
-    throw err;
-  }
+  return Response.json({ job: await importTorrent(body.hash, files, body?.remove === true, body?.playlist === true) }, { status: 202 });
 });

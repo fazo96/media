@@ -1,7 +1,7 @@
-import { inspectPlaylist } from "@/lib/ytdlp";
 import { findPlaylist } from "@/lib/playlists";
-import { badRequest, fail, noStore, route } from "@/lib/route";
+import { askYoutube, badRequest, noStore, route } from "@/lib/route";
 import { parsePlaylist } from "@/lib/youtube";
+import { inspectPlaylist } from "@/lib/ytdlp";
 
 export const dynamic = "force-dynamic";
 
@@ -9,12 +9,6 @@ export const dynamic = "force-dynamic";
 export const GET = route(async (req) => {
   const listId = parsePlaylist(new URL(req.url).searchParams.get("list") ?? "");
   if (!listId) return badRequest("That isn’t a YouTube playlist.");
-  const timeout = AbortSignal.timeout(60_000);
-  try {
-    const yt = await inspectPlaylist(listId, AbortSignal.any([req.signal, timeout]));
-    return noStore({ ...yt, playlistId: (await findPlaylist((p) => p.youtubePlaylistId === listId))?.id });
-  } catch (err) {
-    if (timeout.aborted) return fail(504, "YouTube took too long to answer.");
-    return fail(502, (err as Error).message);
-  }
+  const yt = await askYoutube(req, (signal) => inspectPlaylist(listId, signal));
+  return noStore({ ...yt, playlistId: (await findPlaylist((p) => p.youtubePlaylistId === listId))?.id });
 });

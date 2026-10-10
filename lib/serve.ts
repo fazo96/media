@@ -7,6 +7,7 @@ import { fileName } from "./browse";
 import { audioFile, thumbFile, videoFile } from "./library";
 import { parseRange } from "./range";
 import { notFound } from "./route";
+import { getShare, sharedVideo } from "./shares";
 import { listenMime, type Video } from "./types";
 
 // Sending a video's file, its audio alone (listen mode) and its still: to the
@@ -71,4 +72,22 @@ export async function serveThumb(id: string, extra: Record<string, string> = {})
   } catch {
     return notFound();
   }
+}
+
+/** What a share link's files are sent with: any origin may read them (a Cast device's included). */
+const ANY_ORIGIN = { "Access-Control-Allow-Origin": "*" };
+
+/**
+ * A share link's route (api/s/<token>/…, no session: the proxy and route()
+ * leave api/s/ alone): `fn` sends the video it shares, with `headers`. Under
+ * …/v/<id>/, one of a playlist link's videos, while it's in the playlist.
+ * Anything else is a 404.
+ */
+export function shareRoute(fn: (req: Request, v: Video, headers: Record<string, string>) => Promise<Response>) {
+  return async (req: Request, { params }: { params: Promise<{ token: string; id?: string }> }): Promise<Response> => {
+    const { token, id } = await params;
+    const share = await getShare(token);
+    const v = !share ? null : id === undefined ? await sharedVideo(share) : share.playlistId ? await sharedVideo(share, id) : null;
+    return v ? fn(req, v, ANY_ORIGIN) : notFound();
+  };
 }

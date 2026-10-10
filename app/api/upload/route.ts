@@ -4,9 +4,8 @@ import path from "node:path";
 import { Readable } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import type { ReadableStream as WebStream } from "node:stream/web";
-import { addVideo, incomingDir, NotAVideo } from "@/lib/library";
+import { addVideo, incomingDir } from "@/lib/library";
 import { badRequest, fail, route } from "@/lib/route";
-import { ToolError } from "@/lib/tools";
 
 export const dynamic = "force-dynamic";
 
@@ -38,8 +37,6 @@ export const POST = route(async (req) => {
     await rm(dir, { recursive: true, force: true });
     // The browser gave up (a closed tab, a cancelled upload): nobody is listening.
     if ((err as NodeJS.ErrnoException).code === "ECONNRESET" || req.signal.aborted) return fail(400, "upload interrupted");
-    if (err instanceof NotAVideo) return fail(415, err.message);
-    if (err instanceof ToolError) return fail(500, err.message);
-    throw err;
+    throw err; // not a video (415), or ffmpeg failed (500): route() answers it
   }
 });
