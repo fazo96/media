@@ -36,17 +36,22 @@ export async function listPlaylists(): Promise<Playlist[]> {
   return lists.sort((a, b) => b.createdAt - a.createdAt);
 }
 
-/** The playlist made from this YouTube playlist, if there is one. */
-export async function findYoutubePlaylist(listId: string): Promise<Playlist | null> {
-  return (await listPlaylists()).find((p) => p.youtubePlaylistId === listId) ?? null;
-}
-
-/** The playlist made from this torrent's Import all, if there is one. */
-export async function findTorrentPlaylist(hash: string): Promise<Playlist | null> {
-  return (await listPlaylists()).find((p) => p.torrentHash === hash) ?? null;
+/** The first playlist `match` picks (the one made from a YouTube playlist, say), if there is one. */
+export async function findPlaylist(match: (p: Playlist) => boolean): Promise<Playlist | null> {
+  return (await listPlaylists()).find(match) ?? null;
 }
 
 type New = Pick<Playlist, "title"> & Partial<Pick<Playlist, "youtubePlaylistId" | "torrentHash" | "url" | "channel" | "items">>;
+
+/**
+ * Add `details.items` at the end of the playlist `match` finds (the one made
+ * before from the same YouTube playlist or torrent), or make one with them.
+ */
+export async function appendOrCreate(match: (p: Playlist) => boolean, details: New): Promise<Playlist> {
+  const items = details.items ?? [];
+  const found = await findPlaylist(match);
+  return (found && (await updatePlaylist(found.id, (p) => ({ ...p, items: [...p.items, ...items] })))) ?? (await createPlaylist(details));
+}
 
 /** A new playlist, under a slug of its title (then title-2, title-3…). */
 export async function createPlaylist(details: New): Promise<Playlist> {

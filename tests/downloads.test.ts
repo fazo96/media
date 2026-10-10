@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatSelector, parsePlaylistInfo, parsePlaylistSearch, parseProgress, parseSearch } from "../lib/downloads.ts";
+import { formatSelector, parseProgress } from "../lib/downloads.ts";
+import { parsePlaylistInfo, parsePlaylistSearch, parseSearch } from "../lib/ytdlp.ts";
 import { lastError } from "../lib/tools.ts";
 
 test("parseProgress reads the template's lines", () => {

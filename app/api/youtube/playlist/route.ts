@@ -1,5 +1,5 @@
-import { inspectPlaylist } from "@/lib/downloads";
-import { findYoutubePlaylist } from "@/lib/playlists";
+import { inspectPlaylist } from "@/lib/ytdlp";
+import { findPlaylist } from "@/lib/playlists";
 import { badRequest, fail, noStore, route } from "@/lib/route";
 import { parsePlaylist } from "@/lib/youtube";
 
@@ -12,7 +12,7 @@ export const GET = route(async (req) => {
   const timeout = AbortSignal.timeout(60_000);
   try {
     const yt = await inspectPlaylist(listId, AbortSignal.any([req.signal, timeout]));
-    return noStore({ ...yt, playlistId: (await findYoutubePlaylist(listId))?.id });
+    return noStore({ ...yt, playlistId: (await findPlaylist((p) => p.youtubePlaylistId === listId))?.id });
   } catch (err) {
     if (timeout.aborted) return fail(504, "YouTube took too long to answer.");
     return fail(502, (err as Error).message);

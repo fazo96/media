@@ -6,7 +6,7 @@ import { Transform } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { listJobs, newJobId, queue } from "./jobs";
 import { addVideo, incomingDir, listVideos } from "./library";
-import { createPlaylist, findTorrentPlaylist, updatePlaylist } from "./playlists";
+import { appendOrCreate, updatePlaylist } from "./playlists";
 import { isActive, type Job, type Torrent, type TorrentFile, type TorrentJob, type Video } from "./types";
 
 // Importing from Transmission (docs/transmission.md): its RPC lists the
@@ -237,10 +237,7 @@ async function torrentPlaylist(job: TorrentJob, t: RawTorrent, videos: Video[]):
     .filter((v) => v.torrentHash === t.hashString)
     .sort((a, b) => (a.originalName ?? "").localeCompare(b.originalName ?? "", undefined, { numeric: true, sensitivity: "base" }))
     .map((v) => v.id);
-  const found = await findTorrentPlaylist(t.hashString);
-  const playlist =
-    (found && (await updatePlaylist(found.id, (p) => ({ ...p, items: [...p.items, ...items] })))) ??
-    (await createPlaylist({ title: playlistTitleOf(t.name), torrentHash: t.hashString, items }));
+  const playlist = await appendOrCreate((p) => p.torrentHash === t.hashString, { title: playlistTitleOf(t.name), torrentHash: t.hashString, items });
   job.playlistId = playlist.id;
   return async (id) => {
     await updatePlaylist(playlist.id, (p) => ({ ...p, items: [...p.items, id] }));

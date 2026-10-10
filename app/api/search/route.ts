@@ -1,4 +1,4 @@
-import { searchYoutube } from "@/lib/downloads";
+import { searchYoutube } from "@/lib/ytdlp";
 import { badRequest, fail, noStore, route } from "@/lib/route";
 
 export const dynamic = "force-dynamic";
