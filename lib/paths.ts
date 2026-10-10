@@ -17,3 +17,5 @@ export const TRASH_DIR = path.join(MEDIA_DIR, ".trash");
 export const INCOMING_DIR = path.join(MEDIA_DIR, ".incoming");
 /** The library under readable names, as links into videos/ (lib/browse.ts), for a file share. */
 export const BROWSE_DIR = path.join(MEDIA_DIR, "Browse");
+/** One <token>.json per share link (lib/shares.ts). */
+export const SHARES_DIR = path.join(MEDIA_DIR, "shares");

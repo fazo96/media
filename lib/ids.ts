@@ -46,3 +46,7 @@ export function youtubeIdFromVideoId(id: string): string | null {
 /** A download job's id (in memory only). */
 const JOB_RE = /^[a-z0-9]{8,32}$/;
 export const isValidJobId = (id: unknown): id is string => typeof id === "string" && JOB_RE.test(id);
+
+/** A share link's token: 128 random bits, in hex. */
+const SHARE_RE = /^[a-f0-9]{32}$/;
+export const isValidShareToken = (token: unknown): token is string => typeof token === "string" && SHARE_RE.test(token);

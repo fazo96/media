@@ -13,11 +13,14 @@
 | `GET /api/youtube/playlist?list=…` | A YouTube playlist read whole ([downloads](downloads.md#playlists)), `YoutubePlaylist`, with `playlistId` when it was downloaded before; nothing is downloaded. 400 when `list` isn't a playlist link or id, 502, 504 |
 | `GET/POST /api/playlists` | Every playlist, newest first; make one: `{ title }` (201 `{ playlist }`), or `{ youtube: <link or id> }` to download a whole YouTube playlist (201 `{ playlist, jobs }`; 502, 504 as above) |
 | `GET/PATCH/DELETE /api/playlists/<id>` | One playlist; `{ title?, add?, remove? }` (video ids: `add` must be in the library, and goes at the end); to the trash, its videos staying |
+| `GET/POST /api/shares` | Share links still good, newest first, with their videos' titles (`?video=<id>`: one video's; cast links aren't listed); make one: `{ video, expires }` with `"1d"`, `"1w"`, `"1m"` or `"never"` (201, the `Share`), or `{ video, cast: true }` for a Cast device (a day long, reused while it has half of that left) |
+| `DELETE /api/shares/<token>` | Revoke a link (204; 404 when there's none) |
+| `GET/HEAD /api/s/<token>/file`, `GET /api/s/<token>/thumb` | **No session**: a share link's video (as `/api/videos/<id>/file`, `?download` as an attachment named for its title) and still, with `Access-Control-Allow-Origin: *`; 404 once the link has expired or been revoked |
 | `GET /api/tools` | yt-dlp, ffmpeg, ffprobe: how each runs, its version |
 | `GET/POST /api/auth` | The lock: `unlock`, `set`, `change`, `remove`, `signout` (from pen) |
 
-Every handler but `auth` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id` and `jid` validated (404) before it runs. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.
+Every handler but `auth` and `api/s/` is wrapped in `route()` (`lib/route.ts`): the session check, params awaited, `id`, `jid` and `token` validated (404) before it runs. A video's file and still are sent by `lib/serve.ts`, for both `api/videos/` and `api/s/`. It answers with the helpers there (`notFound`, `badRequest`, `fail`, `noContent`, `noStore`) and reads bodies with `readJson`.
 
 ## The proxy and the upload
 
-`proxy.ts` is the first lock check: pages redirect to `/unlock`, API calls get 401. Next's proxy buffers a request body only up to `proxyClientMaxBodySize` (10 MB), which would cut videos short, so `api/upload` is left out of its matcher; `route()` is its only check. The upload streams the body straight to `.incoming/` (`stream.pipeline`), so a file's size doesn't matter. A browser giving up mid-upload is answered quietly and its partial file removed.
+`proxy.ts` is the first lock check: pages redirect to `/unlock`, API calls get 401. It lets `/s/…` and `/api/s/…` through: a share link's token is its check (`lib/shares.ts`). Next's proxy buffers a request body only up to `proxyClientMaxBodySize` (10 MB), which would cut videos short, so `api/upload` is left out of its matcher; `route()` is its only check. The upload streams the body straight to `.incoming/` (`stream.pipeline`), so a file's size doesn't matter. A browser giving up mid-upload is answered quietly and its partial file removed.

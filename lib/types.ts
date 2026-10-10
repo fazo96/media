@@ -107,3 +107,20 @@ export type Playlist = {
 };
 
 export type ToolStatus = { name: string; command: string[] | null; version?: string; error?: string };
+
+/** How long a new share link lasts. */
+export type ShareExpiry = "1d" | "1w" | "1m" | "never";
+
+/** A share link (MEDIA_DIR/shares/<token>.json): /s/<token> plays one video, no session needed. */
+export type Share = {
+  token: string;
+  videoId: string;
+  createdAt: number;
+  /** null: until revoked. */
+  expiresAt: number | null;
+  /** Made for casting: short-lived, reused, and not listed with the links people made. */
+  cast?: boolean;
+};
+
+/** A share link as GET /api/shares lists it: with its video's title (none once the video's deleted). */
+export type SharedLink = Share & { title?: string };

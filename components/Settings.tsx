@@ -4,9 +4,10 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { api } from "@/lib/api";
 import type { ToolStatus } from "@/lib/types";
-import { IconBack, IconFilm, IconWarn } from "./icons";
+import { IconBack, IconFilm, IconShare, IconWarn } from "./icons";
 import LockSettings from "./LockSettings";
 import SettingsHead from "./SettingsHead";
+import { SharedLinks } from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
 
 const PURPOSE: Record<string, string> = {
@@ -78,6 +79,11 @@ export default function Settings({ locked }: { locked: boolean }) {
       </header>
       <main className="settings">
         <Tools />
+        <section className="settings-section" aria-labelledby="shares-title">
+          <SettingsHead icon={<IconShare />} title="Shared links" id="shares-title" />
+          <p className="settings-text">Links that play one video for anyone who has them, no password needed. Revoke one and it stops working at once.</p>
+          <SharedLinks />
+        </section>
         <LockSettings locked={locked} />
       </main>
     </div>

@@ -1,5 +1,5 @@
 import "server-only";
-import { isValidId, isValidJobId } from "./ids";
+import { isValidId, isValidJobId, isValidShareToken } from "./ids";
 import { hasSession, lockedResponse } from "./session";
 
 // What every API route does first, and the answers they share. The proxy is the
@@ -9,7 +9,7 @@ import { hasSession, lockedResponse } from "./session";
 type Params = Record<string, string>;
 
 // Route segments that name something; a bad one is a 404 before the handler runs.
-const CHECKS: Record<string, (value: string) => boolean> = { id: isValidId, jid: isValidJobId };
+const CHECKS: Record<string, (value: string) => boolean> = { id: isValidId, jid: isValidJobId, token: isValidShareToken };
 
 /** A route handler behind the session check, with its params awaited and checked. */
 export function route<P extends Params = Params>(fn: (req: Request, params: P) => Promise<Response>) {

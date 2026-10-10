@@ -6,8 +6,10 @@ import { useEffect, useRef, useState } from "react";
 import { saveProgress } from "@/lib/api";
 import { formatAgo, formatDuration, formatHeight, formatSize } from "@/lib/format";
 import type { Video } from "@/lib/types";
-import { IconBack, IconExternal, IconFilm, IconNext, IconWarn } from "./icons";
+import { IconBack, IconCast, IconExternal, IconFilm, IconNext, IconWarn } from "./icons";
+import ShareButton from "./ShareLinks";
 import ThemeButton from "./ThemeButton";
+import { useCast } from "./useCast";
 import { thumbUrl } from "./VideoCard";
 
 /** How often, while playing, where it is goes to the server. */
@@ -30,6 +32,8 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   const [failed, setFailed] = useState(false);
   // Whether this page counted its play: a ref, so it holds however often the effect below runs (StrictMode runs it twice).
   const started = useRef(false);
+  // While it plays on a TV (useCast), which keeps the server told where it is instead.
+  const casting = useRef(false);
 
   // In a playlist: the ones either side, and the seconds left before the next one plays (null: not counting).
   const index = playlist ? playlist.videos.findIndex((o) => o.id === v.id) : -1;
@@ -40,6 +44,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
   // The listeners below are set up once per video, so they read these through refs.
   const nav = useRef({ next: "", prev: "" });
   nav.current = { next: next ? hrefOf(next) : "", prev: prev ? hrefOf(prev) : "" };
+  const cast = useCast({ video: v, el: ref, casting, onEnded: () => nav.current.next && setUpNext(UP_NEXT_S) });
 
   useEffect(() => {
     if (upNext === null) return;
@@ -59,7 +64,7 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
     let lastSent = -1;
     const save = (beacon = false) => {
       const position = el.currentTime;
-      if (!started.current || Math.abs(position - lastSent) < 0.05) return;
+      if (!started.current || casting.current || Math.abs(position - lastSent) < 0.05) return;
       lastSent = position;
       lastSave = Date.now();
       void saveProgress(v.id, { position }, beacon);
@@ -203,6 +208,24 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
             />
           </div>
 
+          {cast.device && (
+            <p className="notice" role="status">
+              <IconCast />
+              <span>
+                Playing on <strong>{cast.device}</strong>
+              </span>
+              <button type="button" className="btn btn-quiet btn-small" onClick={cast.toggle}>
+                Stop casting
+              </button>
+            </p>
+          )}
+          {cast.error && (
+            <p className="notice is-error" role="alert">
+              <IconWarn />
+              {cast.error}
+            </p>
+          )}
+
           {upNext !== null && next && (
             <p className="notice up-next" role="status">
               <IconNext />
@@ -248,6 +271,14 @@ export default function Player({ video: v, others, playlist }: { video: Video; o
                 </>
               )}
             </p>
+            <div className="watch-actions">
+              <ShareButton videoId={v.id} title={v.title} />
+              {cast.available && (
+                <button type="button" className={`btn btn-small ${cast.device ? "is-on" : ""}`} onClick={cast.toggle} aria-pressed={!!cast.device}>
+                  <IconCast /> {cast.device ? "Casting" : "Cast"}
+                </button>
+              )}
+            </div>
             {resumed !== null && (
               <p className="resumed">
                 Picked up at {formatDuration(resumed)}.{" "}

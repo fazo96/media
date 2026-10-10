@@ -141,3 +141,25 @@ export const IconFilm = (p: P) => (
     <path d="M6.5 4v12M13.5 4v12M3.5 8h3M3.5 12h3M13.5 8h3M13.5 12h3" />
   </svg>
 );
+
+export const IconDownload = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M10 3.5V13M6 9l4 4 4-4M3.5 13v2.5a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1V13" />
+  </svg>
+);
+
+export const IconShare = (p: P) => (
+  <svg {...base} {...p}>
+    <circle cx="14.5" cy="5" r="2" />
+    <circle cx="5.5" cy="10" r="2" />
+    <circle cx="14.5" cy="15" r="2" />
+    <path d="M7.3 9l5.4-3M7.3 11l5.4 3" />
+  </svg>
+);
+
+export const IconCast = (p: P) => (
+  <svg {...base} {...p}>
+    <path d="M3 7V5.5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v9a1 1 0 0 1-1 1h-5M3 10a5.5 5.5 0 0 1 5.5 5.5M3 12.8a2.7 2.7 0 0 1 2.7 2.7" />
+    <circle cx="3.4" cy="15.1" r="0.6" fill="currentColor" />
+  </svg>
+);

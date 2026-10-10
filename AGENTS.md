@@ -26,7 +26,7 @@ A self-hosted library of the videos you watch again: drop files in or paste YouT
 | --- | --- |
 | [docs/development.md](docs/development.md) | Running it, the running service and redeploying, Nix (the package and the module), the tools it needs, stopping servers, the service worker, Docker |
 | [docs/testing.md](docs/testing.md) | Unit tests, the Playwright browser suite and its yt-dlp stub |
-| [docs/library.md](docs/library.md) | The library on disk (`lib/library.ts`, `lib/playlists.ts`): layout, ids, adding a video (probe, remux, thumbnail), playlists, Browse (the library by title, for a file share), the trash |
+| [docs/library.md](docs/library.md) | The library on disk (`lib/library.ts`, `lib/playlists.ts`): layout, ids, adding a video (probe, remux, thumbnail), playlists, Browse (the library by title, for a file share), share links, the trash |
 | [docs/downloads.md](docs/downloads.md) | YouTube downloads (`lib/downloads.ts`): the queue, yt-dlp’s arguments, progress, search, playlists |
 | [docs/api.md](docs/api.md) | `app/api/`: every route, `route()` and its helpers, the upload and the proxy |
-| [docs/pages.md](docs/pages.md) | The library page, a playlist, the player, settings, the lock, offline |
+| [docs/pages.md](docs/pages.md) | The library page, a playlist, the player (Share, Cast), a share link's page, settings, the lock, offline |

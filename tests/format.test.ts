@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { formatAgo, formatDuration, formatSize, formatViews } from "../lib/format.ts";
+import { formatAgo, formatDuration, formatIn, formatSize, formatViews } from "../lib/format.ts";
 
 test("formatDuration", () => {
   assert.equal(formatDuration(0), "0:00");
@@ -21,6 +21,14 @@ test("formatAgo", () => {
   assert.equal(formatAgo(now - 5 * 60_000, now), "5 min ago");
   assert.equal(formatAgo(now - 3600_000, now), "1 hour ago");
   assert.equal(formatAgo(now - 3 * 86400_000, now), "3 days ago");
+});
+
+test("formatIn", () => {
+  const now = 1_000_000_000_000;
+  assert.equal(formatIn(now + 10_000, now), "in under a minute");
+  assert.equal(formatIn(now + 2 * 3600_000, now), "in 2 hours");
+  // A week-long link a moment after it was made.
+  assert.equal(formatIn(now + 7 * 86400_000 - 1500, now), "in 1 week");
 });
 
 test("formatViews", () => {

@@ -9,6 +9,7 @@ videos/<id>/video.mp4   the video (or .webm, or the original extension when it c
             thumb.jpg   640px still (from yt-dlp for YouTube, else ffmpeg at 10% in, max 10s)
 playlists/<id>.json     a Playlist (lib/types.ts): title, items (video ids, in order), and
                         for one downloaded from YouTube its list id, link and channel
+shares/<token>.json     a share link (lib/types.ts Share): the video, when made, when it expires (null: never)
 Browse/                 the library under its titles, as links into videos/ (see Browse, below)
 .browse.<random>/       Browse/ being rebuilt; removed at startup if a stop left one
 .trash/<id>.<ms>/       deleted videos (and playlist-<id>.<ms>.json, deleted playlists); nothing empties it
@@ -54,3 +55,9 @@ Browse/Playlists/<Playlist>/01 - <Title>.mp4    -> ../../../videos/<id>/video.mp
 - `fileName()` turns a title into a name any SMB client takes: no `\ / : * ? " < > |` or control characters, no leading or trailing dots and spaces, at most 200 bytes, `Untitled` when nothing's left, and `_` after a Windows device name (`CON_`). Two the same (ignoring case) become `Title (2)`; the oldest keeps the plain name, so adding a video never renames another.
 - A playlist's items are numbered in order; the ones not in the library are left out.
 - Samba follows links that stay inside a share by default (`follow symlinks = yes`, `wide links = no`), so sharing `MEDIA_DIR` or a folder above it is enough. What's watched over the share doesn't count as played here.
+
+## Share links
+
+`lib/shares.ts`. A link is a file named by its token (128 random bits in hex, `isValidShareToken`), made exclusively (`createExclusive`), holding the video's id, when it was made and when it expires (`null`: never). `/s/<token>` and `/api/s/<token>/…` play that one video without a session while `getShare()` finds it unexpired ([api](api.md), [pages](pages.md#a-share-link-stoken-appstokenpagetsx)). Revoking deletes the file. Expiry is `1d`, `1w`, `1m` (an average month, so the page says "1 month") or `never`.
+
+Cast links (`cast: true`) are the same, made for a Cast device ([pages](pages.md#casting)): a day long, reused for the same video while they have half a day left, and never listed. At startup `cleanShares()` deletes expired links and ones whose video is gone (trashing a video doesn't, since a re-download trashes and replaces it under the same id).

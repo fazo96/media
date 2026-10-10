@@ -197,3 +197,134 @@
   flex: 1;
   min-width: 0;
 }
+
+/* ─── Share and Cast, under the video (share links are listed in Settings too) ─── */
+.watch-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 8px;
+  margin-top: 14px;
+}
+
+.watch-actions svg,
+.share-panel .btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.btn.is-on {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.share {
+  display: contents;
+}
+
+.share-panel {
+  order: 10; /* below the buttons, the row's whole width */
+  flex-basis: 100%;
+  padding: 14px;
+  border: 1px solid var(--rule);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+}
+
+.share-text {
+  margin: 0 0 12px;
+  font-size: 13.5px;
+  color: var(--ink-soft);
+}
+
+.share-new {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+
+.share-label {
+  font-size: 13px;
+  color: var(--ink-soft);
+}
+
+.chips {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.share-links {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+}
+
+.share-link {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 4px 8px;
+}
+
+.share-link-title {
+  grid-column: 1 / -1;
+  font-weight: 550;
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.share-link-url {
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border: 1px solid var(--rule);
+  border-radius: 6px;
+  background: var(--bg-sunk);
+  color: var(--ink);
+  font: 12.5px var(--font-mono);
+}
+
+.share-link-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.share-link-actions svg {
+  width: 15px;
+  height: 15px;
+}
+
+.share-revoke {
+  color: var(--danger);
+}
+
+.share-link-meta,
+.share-link-error {
+  grid-column: 1 / -1;
+  font-size: 12px;
+  color: var(--ink-faint);
+}
+
+.share-link-error {
+  color: var(--danger);
+}
+
+@media (max-width: 640px) {
+  .share-link {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* A share link's page: the player alone. */
+.watch-shared {
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1200px;
+}

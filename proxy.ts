@@ -10,6 +10,8 @@ export async function proxy(req: NextRequest) {
 
   const { pathname, search } = req.nextUrl;
   if (pathname === "/unlock") return NextResponse.next(); // matched only for the check above
+  // A share link needs no session: its page and routes check its token instead.
+  if (pathname.startsWith("/s/") || pathname.startsWith("/api/s/")) return NextResponse.next();
   if (await isAuthorized(req.cookies.get(SESSION_COOKIE)?.value)) return NextResponse.next();
 
   if (pathname.startsWith("/api/")) {

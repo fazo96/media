@@ -24,13 +24,25 @@ A native `<video>` streaming `/api/videos/<id>/file`. It resumes from `position`
 
 Played from a playlist (`?list=<pid>`, and only if the video is in it), the side shows the playlist instead, with this video marked, and back goes to the playlist. At the end, "Up next" counts 5 seconds and plays the next one (Play now, or Cancel; playing again cancels it too). Shift+N and Shift+P go to the next and previous.
 
+Under the details, **Share** (`components/ShareLinks.tsx`) makes a [share link](library.md#share-links) for the video, lasting 1 day, 1 week (the default), 1 month or until revoked, and lists the video's links: copy, send (the system share sheet, where there is one) and revoke. **Cast** is there when a Cast device is (see Casting, below).
+
+## Casting
+
+`components/useCast.ts` loads Google's Cast sender SDK (`cast_sender.js` from gstatic, once a page) and uses its Default Media Receiver, so there's no receiver app of our own. Only Chrome has Cast: elsewhere the SDK says so and the button never shows. Casting pauses the page's video and has the device play from a cast link (`POST /api/shares { video, cast: true }`, since the device has no session), from where the page was, with the title and still. While it plays there, "Playing on <device>" shows with Stop casting; the page's play button (or K) plays and pauses the TV; the TV's place is saved every 5 seconds (the page's own saving stands down, through a `casting` ref), and its end counts as the end, so a playlist's "Up next" runs. A player page opened while casting (the next in a playlist, say) joins the session and sends its own video. Stopping picks up on the page where the TV was.
+
+The device fetches the file itself, so it must reach the server at the address the page was opened from (`location.origin`): over HTTPS with a real certificate, as media.trippy.pizza is. There's no automated test of a real device.
+
+## A share link (`/s/<token>`, `app/s/[token]/page.tsx`)
+
+No session needed: the video with its title, details and **Download**, and nothing that leads into the library; watching doesn't count as a play or save a place. Its metadata gives chat apps a preview (`og:` title, still and video, from absolute URLs built from the forwarded host) and tells search engines to keep out (`noindex`). An expired or revoked link is a 404 saying so (`app/s/[token]/not-found.tsx`). The service worker doesn't keep these pages.
+
 ## Settings (`/settings`)
 
-The tools found (`GET /api/tools`) and the lock.
+The tools found (`GET /api/tools`), the share links still good (any can be revoked; cast links aren't listed), and the lock.
 
 ## The lock
 
-From pen, unchanged: an optional password (`lib/auth.ts`, scrypt; session cookie `media_session`, HMAC-signed, 90 days). `proxy.ts` and `route()` both check. Delete `MEDIA_DIR/.media-auth.json` to remove a forgotten password.
+From pen, unchanged: an optional password (`lib/auth.ts`, scrypt; session cookie `media_session`, HMAC-signed, 90 days). `proxy.ts` and `route()` both check. A share link is the one way past it, for one video; changing the password doesn't end share links (revoking does). Delete `MEDIA_DIR/.media-auth.json` to remove a forgotten password.
 
 ## Offline
 
