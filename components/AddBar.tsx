@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
-import { IconDownload, IconLink, IconPlaylist, IconSearch, IconUpload } from "./icons";
+import { IconLink, IconPlaylist, IconSearch, IconUpload } from "./icons";
 import { MEDIA_ACCEPT } from "./useUploads";
 
 type Props = {
@@ -10,16 +10,15 @@ type Props = {
   onLink: (text: string) => Promise<boolean>;
   /** Anything that isn't a link. */
   onSearch: (query: string) => void;
-  onFiles: (files: File[]) => void;
-  /** Transmission is set up: its button, on while its panel shows. */
-  transmission: boolean;
-  torrents: boolean;
-  onTorrents: () => void;
+  /** Add files (the library's): without it, no button. */
+  onFiles?: (files: File[]) => void;
+  /** What the box starts with (the search page's search). */
+  initial?: string;
 };
 
-/** The ways in: a YouTube link or a search, files, and Transmission. */
-export default function AddBar({ onLink, onSearch, onFiles, transmission, torrents, onTorrents }: Props) {
-  const [text, setText] = useState("");
+/** The ways in: a YouTube link or a search, and files. */
+export default function AddBar({ onLink, onSearch, onFiles, initial = "" }: Props) {
+  const [text, setText] = useState(initial);
   const fileInput = useRef<HTMLInputElement>(null);
 
   // A playlist link (with no video in it) opens the playlist rather than downloading.
@@ -50,25 +49,24 @@ export default function AddBar({ onLink, onSearch, onFiles, transmission, torren
           {isPlaylistLink ? "Open" : isLink ? "Download" : "Search"}
         </button>
       </form>
-      <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
-        <IconUpload /> Add files
-      </button>
-      {transmission && (
-        <button type="button" className="btn" aria-pressed={torrents} onClick={onTorrents}>
-          <IconDownload /> Transmission
-        </button>
+      {onFiles && (
+        <>
+          <button type="button" className="btn" onClick={() => fileInput.current?.click()}>
+            <IconUpload /> Add files
+          </button>
+          <input
+            ref={fileInput}
+            type="file"
+            accept={MEDIA_ACCEPT}
+            multiple
+            hidden
+            onChange={(e) => {
+              onFiles([...(e.target.files ?? [])]);
+              e.target.value = "";
+            }}
+          />
+        </>
       )}
-      <input
-        ref={fileInput}
-        type="file"
-        accept={MEDIA_ACCEPT}
-        multiple
-        hidden
-        onChange={(e) => {
-          onFiles([...(e.target.files ?? [])]);
-          e.target.value = "";
-        }}
-      />
     </section>
   );
 }

@@ -10,12 +10,9 @@ import JobCard, { QueuedPlaylistCard, UploadCard } from "./JobCard";
 import { IconSearch, IconUpload } from "./icons";
 import Logo from "./Logo";
 import Notice from "./Notice";
-import PlaylistPreview from "./PlaylistPreview";
-import PlaylistShelf from "./PlaylistShelf";
-import SearchResults from "./SearchResults";
 import StorageMeter from "./StorageMeter";
+import Tabs from "./Tabs";
 import Topbar from "./Topbar";
-import TransmissionPanel from "./TransmissionPanel";
 import { useLibrary } from "./useLibrary";
 import { useDropAndPaste, useUploads } from "./useUploads";
 import { type News, useYoutube } from "./useYoutube";
@@ -26,13 +23,12 @@ const SORT_KEY = "media:sort";
 /** `transmission`: importing from Transmission is set up (MEDIA_TRANSMISSION_URL). */
 type Props = { initialVideos: Video[]; initialJobs: Job[]; initialPlaylists: Playlist[]; storage: DiskUsage; transmission: boolean };
 
-/** The home page: every video and playlist, the downloads under way, and the ways in (drop, paste, pick). */
+/** The home page: every video, the downloads under way, and the ways in (drop, paste, pick). */
 export default function Library({ initialVideos, initialJobs, initialPlaylists, storage, transmission }: Props) {
   const lib = useLibrary({ videos: initialVideos, jobs: initialJobs, playlists: initialPlaylists });
   const { videos, jobs, playlists, keepJobs, keepPlaylist } = lib;
   const [query, setQuery] = useState("");
   const [sort, setSort] = useState<Sort>("recent");
-  const [torrents, setTorrents] = useState(false);
   const [notice, setNotice] = useState<News | null>(null);
   const say = useCallback((text: string) => setNotice({ text, error: true }), []);
 
@@ -45,7 +41,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     local.set(SORT_KEY, s);
   };
 
-  const yt = useYoutube({ keepJobs, keepPlaylist, say: setNotice });
+  const yt = useYoutube({ keepJobs, say: setNotice });
   const { addLink } = yt;
   const up = useUploads({ onAdded: lib.keepVideo, onRefused: say });
   const { addFiles } = up;
@@ -63,11 +59,6 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
     const list = q ? videos.filter((v) => `${v.title} ${v.channel ?? ""} ${v.originalName ?? ""}`.toLowerCase().includes(q)) : videos;
     return sorted(list, sort);
   }, [videos, query, sort]);
-  const shownPlaylists = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return q ? playlists.filter((p) => `${p.title} ${p.channel ?? ""}`.toLowerCase().includes(q)) : playlists;
-  }, [playlists, query]);
-  const byId = useMemo(() => new Map(videos.map((v) => [v.id, v])), [videos]);
 
   // A whole playlist's downloads waiting their turn show as one card per playlist.
   const { singleJobs, queuedLists } = useMemo(() => {
@@ -95,7 +86,7 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
   };
 
   const pending = jobs.length + up.uploads.length;
-  const empty = videos.length === 0 && pending === 0 && playlists.length === 0;
+  const empty = videos.length === 0 && pending === 0;
 
   return (
     <div className="app">
@@ -113,14 +104,8 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
       </Topbar>
 
       <main className="library">
-        <AddBar
-          onLink={addLink}
-          onSearch={(q) => void yt.runSearch(q)}
-          onFiles={onFiles}
-          transmission={transmission}
-          torrents={torrents}
-          onTorrents={() => setTorrents((on) => !on)}
-        />
+        <Tabs transmission={transmission} />
+        <AddBar onLink={addLink} onSearch={yt.runSearch} onFiles={onFiles} />
 
         {notice && (
           <Notice error={notice.error} onDismiss={() => setNotice(null)}>
@@ -131,30 +116,6 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
               </button>
             )}
           </Notice>
-        )}
-
-        {torrents && <TransmissionPanel jobs={jobs} onJob={(job) => keepJobs([job])} onClose={() => setTorrents(false)} />}
-
-        {yt.preview && (
-          <PlaylistPreview
-            preview={yt.preview}
-            videos={videos}
-            jobs={jobs}
-            onAdd={onLink}
-            onDownloadAll={yt.downloadAll}
-            onClose={yt.closePreview}
-          />
-        )}
-
-        {yt.search && (
-          <SearchResults
-            search={yt.search}
-            videos={videos}
-            jobs={jobs}
-            onAdd={onLink}
-            onOpenPlaylist={(listId) => void yt.openPlaylist(listId)}
-            onClose={yt.closeSearch}
-          />
         )}
 
         {empty ? (
@@ -170,15 +131,6 @@ export default function Library({ initialVideos, initialJobs, initialPlaylists, 
           </section>
         ) : (
           <>
-            <PlaylistShelf
-              playlists={shownPlaylists}
-              total={playlists.length}
-              byId={byId}
-              filtered={!!query}
-              onCreated={keepPlaylist}
-              onError={say}
-            />
-
             <div className="shelf-head">
               <h1 className="shelf-title">
                 Library <span className="count">{videos.length}</span>

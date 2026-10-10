@@ -1,11 +1,4 @@
-/* ─── Playlists: the library's shelf, YouTube's, and their page ─── */
-
-/* The shelf above the videos. */
-.playlists {
-  margin-bottom: 28px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--rule);
-}
+/* ─── Playlists: their page, YouTube's, and a playlist's page ─── */
 
 .playlists-hint {
   margin: 0;

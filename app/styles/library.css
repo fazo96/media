@@ -139,6 +139,11 @@
   border-bottom: 1px solid var(--rule);
 }
 
+/* The last one on the page: nothing to rule off. */
+.results:last-child {
+  border-bottom: 0;
+}
+
 .results .shelf-head {
   flex-wrap: nowrap;
 }

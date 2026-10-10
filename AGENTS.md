@@ -31,4 +31,4 @@ A self-hosted library of the videos you watch again (and music): drop files in o
 | [docs/downloads.md](docs/downloads.md) | The jobs (`lib/jobs.ts`), YouTube downloads (`lib/downloads.ts`) and reading YouTube (`lib/ytdlp.ts`): the queue, yt-dlp’s arguments, progress, search, playlists |
 | [docs/transmission.md](docs/transmission.md) | Importing from Transmission (`lib/transmission.ts`): setting it up, the RPC, an import (copy, then remove the torrent), the panel |
 | [docs/api.md](docs/api.md) | `app/api/`: every route, `route()` and its helpers, the upload and the proxy |
-| [docs/pages.md](docs/pages.md) | The library page, a playlist, the player (Share, Cast, Listen), now playing (the layer that plays on across pages, and its widget), the media notification, a share link's page, settings, the lock, offline |
+| [docs/pages.md](docs/pages.md) | The sections and their tabs (the library, the playlists, search, Transmission), a playlist, the player (Share, Cast, Listen), now playing (the layer that plays on across pages, and its widget), the media notification, a share link's page, settings, the lock, offline |

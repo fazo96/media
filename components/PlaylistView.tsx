@@ -14,7 +14,7 @@ import { Confirm, Rename } from "./InlineEdit";
 import MediaRow, { Still } from "./MediaRow";
 import Notice from "./Notice";
 import ShareButton from "./ShareLinks";
-import Topbar, { toLibrary } from "./Topbar";
+import Topbar, { toPlaylists } from "./Topbar";
 import { useLibrary } from "./useLibrary";
 import YtThumb from "./YtThumb";
 
@@ -71,7 +71,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
   const destroy = async () => {
     try {
       await deletePlaylist(p.id);
-      router.push("/");
+      router.push("/playlists");
     } catch (err) {
       fail(err);
     }
@@ -93,7 +93,7 @@ export default function PlaylistView({ initialPlaylist, initialVideos, initialJo
 
   return (
     <div className="app">
-      <Topbar back={toLibrary} title={p.title} />
+      <Topbar back={toPlaylists} title={p.title} />
 
       <main className="library playlist-page">
         <section className="playlist-head">

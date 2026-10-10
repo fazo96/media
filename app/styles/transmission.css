@@ -1,12 +1,7 @@
-/* ─── Transmission: torrents to import, above the library ── */
+/* ─── Transmission: its page, the torrents to import ─────── */
 .shelf-actions {
   display: flex;
   flex-shrink: 0;
-}
-
-.btn[aria-pressed="true"] {
-  border-color: var(--accent);
-  color: var(--accent);
 }
 
 .torrent-filter {
@@ -125,4 +120,9 @@ a.torrent-file-state:hover {
   .torrent-file-size {
     display: none;
   }
+}
+
+/* The imports under way, above the torrents. */
+.imports {
+  margin-bottom: 28px;
 }

@@ -1,27 +1,42 @@
 # The pages
 
-Pieces they share: the top bar (`components/Topbar.tsx`: back or the wordmark, the page's title, [now playing](#now-playing)'s widget, the theme), a row of videos (`components/MediaRow.tsx`: a playlist's, the player's side lists, a share link's), notices (`components/Notice.tsx`), and renaming in place and confirming a delete (`components/InlineEdit.tsx`).
+Pieces they share: the top bar (`components/Topbar.tsx`: back or the wordmark, the page's title, [now playing](#now-playing)'s widget, the theme), a row of videos (`components/MediaRow.tsx`: a playlist's, the player's side lists, a share link's), notices (`components/Notice.tsx`), and renaming in place and confirming a delete (`components/InlineEdit.tsx`). The sections (the library, the playlists, search and, when it's set up, Transmission) have tabs under the top bar (`components/Tabs.tsx`; on a phone, without their icons), the open one marked (`aria-current`), and Settings' button in the top bar.
 
 ## The library (`/`, `components/Library.tsx`)
 
-Server-rendered with every video, playlist and the current downloads, then kept fresh in the browser. Back and Forward bring a page back as it was left without asking the server (Next's router cache, or the browser's back-forward cache), so the library and a playlist's page fetch their data again whenever they mount or show again (`pageshow`). Both keep it with `useLibrary()` (`components/useLibrary.ts`), which also follows the downloads (below). The page's parts: `AddBar` (the link or search box, Add files, Transmission), `useYoutube` (search, a playlist's preview, downloading), `useUploads` and `useDropAndPaste` (`components/useUploads.ts`), `PlaylistShelf`, and the grid. The ways in:
+Server-rendered with every video, playlist and the current downloads, then kept fresh in the browser. Back and Forward bring a page back as it was left without asking the server (Next's router cache, or the browser's back-forward cache), so every page that shows the library (the library, the playlists, search, Transmission, a playlist's page) fetches its data again whenever it mounts or shows again (`pageshow`). They keep it with `useLibrary()` (`components/useLibrary.ts`), which also follows the downloads (below). The page's parts: `AddBar` (the link or search box, and Add files), `useYoutube` (`components/useYoutube.ts`: a link downloads; a search or a playlist goes to [search](#search-search-componentsyoutubesearchtsx)), `useUploads` and `useDropAndPaste` (`components/useUploads.ts`), and the grid. The ways in:
 
 - **Drop** video or music files anywhere on the page (a window-level drag listener shows the drop target), or **Add files**. Uploads go one at a time (XHR, for upload progress; `uploadVideo` in `lib/api.ts`) and show as cards until their video replaces them.
 - **Paste** a YouTube link in the box, or anywhere on the page outside a text field: a link `parseYoutube` recognizes starts a download straight away. Pasted files upload.
-- **Transmission** (when [set up](transmission.md)): the torrents' videos, to import, and then delete from Transmission ([transmission](transmission.md#the-page)). Imports show as cards like downloads.
-- **Search** YouTube from the same box: text that isn't a link turns the button into "Search", and the results (`components/SearchResults.tsx`) show above the library: a row of playlists, then the videos. `+` downloads one like a pasted link; one downloading says so, and one already in the library says "In the library" and plays from its still. A new search cancels the one under way; `×` closes them.
-- **A YouTube playlist** opens above the results (`components/PlaylistPreview.tsx`): from a search, or by pasting its link (the button says "Open"). It lists what can be downloaded, each with `+`, and **Download all (N new)** downloads the whole playlist into one in the library ([downloads](downloads.md#playlists)). Nothing downloads before that click, since a playlist can be hundreds of videos long. A watch link inside a playlist downloads its video, and the notice offers "Open the playlist".
-- While a download is active the page polls `GET /api/jobs` every second. A finished job's card disappears and the list is refetched; failed ones stay with their error, a retry and a dismiss. A playlist's downloads still waiting their turn show as one card ("N more videos waiting their turn", with a cancel for all of them); the one running and failed ones show on their own.
+- **Search** YouTube from the same box: text that isn't a link turns the button into "Search", which opens [search](#search-search-componentsyoutubesearchtsx) with it. A YouTube playlist link (the button says "Open") opens there too. A watch link inside a playlist downloads its video, and the notice offers "Open the playlist".
+- While a download is active the page polls `GET /api/jobs` every second. A finished job's card disappears and the list is refetched; failed ones stay with their error, a retry and a dismiss. A playlist's downloads still waiting their turn show as one card ("N more videos waiting their turn", with a cancel for all of them); the one running and failed ones show on their own. Imports from [Transmission](#transmission-transmission-componentstransmissiontsx) show as cards like downloads.
 
-**Playlists** have a shelf above the videos (`components/PlaylistShelf.tsx`, each a `components/PlaylistCard.tsx`: up to four stills, how many are in the library) and a **New playlist** button. A video joins or leaves one from its card's `⋯` menu, **Add to playlist…** (`components/PlaylistPicker.tsx`: each playlist ticks on and off, and a name field makes a new one with the video in it).
+A video joins or leaves a [playlist](#the-playlists-playlists-componentsplayliststsx) from its card's `⋯` menu, **Add to playlist…** (`components/PlaylistPicker.tsx`: each playlist ticks on and off, and a name field makes a new one with the video in it).
 
 The topbar's **storage meter** (`components/StorageMeter.tsx`) is a bar of the library's disk (the library and its trash in the accent color, everything else on the disk grey, then what's free) and "312 GB · 1.1 TB free", hidden under 720px wide; its tooltip has the trash and the disk's size, and it links to Settings' Storage. The page brings the numbers ([library](library.md#disk-usage)); it asks `GET /api/storage` again when the videos change (one added or deleted). Under 5% free it turns red.
 
-Sorting (recently watched, most watched, recently added, A–Z) is remembered per device (localStorage `media:sort`). "Recently watched" puts never-watched videos at the time they were added. Search filters videos by title, channel and file name, and playlists by title and channel. Each card's `⋯` menu renames, re-downloads or opens a YouTube video, and deletes (to the trash, after a confirm).
+Sorting (recently watched, most watched, recently added, A–Z) is remembered per device (localStorage `media:sort`). "Recently watched" puts never-watched videos at the time they were added. The top bar's search filters videos by title, channel and file name. Each card's `⋯` menu renames, re-downloads or opens a YouTube video, and deletes (to the trash, after a confirm).
+
+## The playlists (`/playlists`, `components/Playlists.tsx`)
+
+Every playlist, each a `components/PlaylistCard.tsx` (up to four stills, how many are in the library), and **New playlist**. The top bar's search filters them by title and channel.
+
+## Search (`/search`, `components/YoutubeSearch.tsx`)
+
+YouTube, from the same box as the library's (without Add files: a link still downloads). What it shows is in the address, so a reload or Back shows it again: `?q=` a search, `?list=` a YouTube playlist, or both (the playlist above the results). `useYoutube` changes the address (`searchHref()`, a new history entry each time) and `useYoutubeShown` reads each when it changes, cancelling the one being read.
+
+- The results (`components/SearchResults.tsx`): a row of playlists, then the videos. `+` downloads one like a pasted link; one downloading says so, and one already in the library says "In the library" and plays from its still. `×` takes the search out of the address.
+- **A YouTube playlist** (`components/PlaylistPreview.tsx`), from a search or a pasted link, lists what can be downloaded, each with `+`, and **Download all (N new)** downloads the whole playlist into one in the library ([downloads](downloads.md#playlists)). Nothing downloads before that click, since a playlist can be hundreds of videos long. `×` takes it out of the address.
+
+With neither, a line says what the page is for. The service worker doesn't keep it: it needs YouTube.
+
+## Transmission (`/transmission`, `components/Transmission.tsx`)
+
+When it's [set up](transmission.md) (a 404 otherwise): the imports under way or failed, as cards with a retry and a dismiss (the library shows them too), then the torrents ([transmission](transmission.md#the-page)).
 
 ## A playlist (`/p/<id>`, `components/PlaylistView.tsx`)
 
-Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. **Listen** turns [listen mode](#listen-mode) on for all its videos (or, when they all have it, off): it's theirs, so it holds wherever they play. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay). Videos not in the library show greyed: downloading (followed every second, as the library follows them), not downloaded (a YouTube one, with a retry and a link), or deleted.
+Its videos in order, each playing within the playlist (`/v/<id>?list=<pid>`), and **Play all** from the top. **Listen** turns [listen mode](#listen-mode) on for all its videos (or, when they all have it, off): it's theirs, so it holds wherever they play. Back goes to the playlists. Rename, remove a video (it stays in the library), delete the playlist (after a confirm; its videos stay; then to the playlists). Videos not in the library show greyed: downloading (followed every second, as the library follows them), not downloaded (a YouTube one, with a retry and a link), or deleted.
 
 ## The player (`/v/<id>`, `components/Player.tsx`)
 
@@ -49,7 +64,7 @@ No automated test can turn a phone's screen off: what's tested is that the layer
 
 One thing plays at a time: the player page's own video playing pauses the layer, and the layer playing (from the widget, say) pauses the video. While a video's page is up, the notification is the video's (`setPageVideo`); otherwise the layer's, with previous and next in its playlist. `useMediaSession` lets go only of what it set itself, as the two hand it back and forth.
 
-The top bar's widget (`components/NowPlayingWidget.tsx`, on the library, a playlist, the player and Settings) shows the track while one is loaded, but on that track's own page: its still and title (to its page, in its playlist), play or pause, next, stop (unloading it, its place saved), and a line for how far it is. On a phone (720px and less) the title goes; at 520px and less, next too, and the top bar drops the wordmark's name and the storage meter to make room for it.
+The top bar's widget (`components/NowPlayingWidget.tsx`, on the sections, a playlist, the player and Settings) shows the track while one is loaded, but on that track's own page: its still and title (to its page, in its playlist), play or pause, next, stop (unloading it, its place saved), and a line for how far it is. On a phone (720px and less) the title goes; at 520px and less, next too, and the top bar drops the wordmark's name and the storage meter to make room for it.
 
 ## The media notification
 
@@ -79,4 +94,4 @@ From pen, unchanged: an optional password (`lib/auth.ts`, scrypt; session cookie
 
 ## Offline
 
-The library is on the server's disk, so once a video is in, playing it needs no internet: only the media server. `public/sw.js` makes the app installable and keeps the pages this device opened (the library, players, playlists, settings) and the app's own files, so the shell opens when the server is briefly unreachable (else `offline.html`). It never keeps videos or API answers: they're too big for a browser's cache, and the server is the library.
+The library is on the server's disk, so once a video is in, playing it needs no internet: only the media server. `public/sw.js` makes the app installable and keeps the pages this device opened (the library, the playlists, players, a playlist's page, settings) and the app's own files, so the shell opens when the server is briefly unreachable (else `offline.html`). It never keeps videos or API answers: they're too big for a browser's cache, and the server is the library.

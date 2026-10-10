@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { downloadPlaylist, errorMessage, inspectPlaylist, requestYoutube, searchYoutube } from "@/lib/api";
 import type { Job, Playlist } from "@/lib/types";
 import { parsePlaylist, parseYoutube } from "@/lib/youtube";
@@ -11,47 +11,40 @@ import type { Search } from "./SearchResults";
 /** A line of news for the page: what happened, maybe with something to do about it. */
 export type News = { text: string; error?: boolean; action?: { label: string; run: () => void } };
 
+/** What the search page shows, from its address: a search (`?q=`), a playlist (`?list=`), or both. */
+export type Shown = { q?: string; list?: string };
+
+/** The search page's address showing `shown`. */
+export const searchHref = ({ q, list }: Shown) => {
+  const params = new URLSearchParams();
+  if (q) params.set("q", q);
+  if (list) params.set("list", list);
+  const qs = params.toString();
+  return qs ? `/search?${qs}` : "/search";
+};
+
 type Props = {
   keepJobs: (jobs: Job[]) => void;
-  keepPlaylist: (p: Playlist) => void;
   /** Tell the person (null: clear what's said). */
   say: (news: News | null) => void;
+  /** What the search page shows now (on another page, nothing). */
+  shown?: Shown;
 };
 
 /**
- * YouTube from the library page (docs/downloads.md): a link downloads its
- * video (or opens its playlist), anything else searches. A newer search or
- * playlist replaces the one showing, cancelling it if it's still being read.
+ * YouTube from any page (docs/downloads.md): a link downloads its video (or
+ * opens its playlist), anything else searches. Searches and playlists show on
+ * the search page, from its address, so opening one goes there.
  */
-export function useYoutube({ keepJobs, keepPlaylist, say }: Props) {
+export function useYoutube({ keepJobs, say, shown }: Props) {
   const router = useRouter();
-  const [search, setSearch] = useState<Search | null>(null);
-  const [preview, setPreview] = useState<Preview | null>(null);
-  const searching = useRef<AbortController | null>(null);
-  const inspecting = useRef<AbortController | null>(null);
+  const q = shown?.q;
+  const list = shown?.list;
 
-  /** A YouTube playlist, read whole (nothing downloaded until Download all). */
-  const openPlaylist = useCallback(
-    async (listId: string) => {
-      inspecting.current?.abort();
-      const abort = new AbortController();
-      inspecting.current = abort;
-      say(null);
-      setPreview({ listId, playlist: null });
-      try {
-        const playlist = await inspectPlaylist(listId, abort.signal);
-        setPreview({ listId, playlist });
-      } catch (err) {
-        if (abort.signal.aborted) return;
-        setPreview({ listId, playlist: null, error: errorMessage(err) });
-      }
-    },
-    [say],
-  );
-  const closePreview = () => {
-    inspecting.current?.abort();
-    setPreview(null);
-  };
+  /** A YouTube playlist, read whole on the search page (nothing downloaded until Download all). */
+  const openPlaylist = useCallback((listId: string) => router.push(searchHref({ q, list: listId })), [router, q]);
+  /** Search YouTube for videos and playlists (a playlist showing stays). */
+  const runSearch = useCallback((query: string) => router.push(searchHref({ q: query, list })), [router, list]);
 
   /** Download a video from a link or an id (`replace`: again, over the one in the library); a playlist link opens it. True when it went. */
   const addLink = useCallback(
@@ -60,14 +53,14 @@ export function useYoutube({ keepJobs, keepPlaylist, say }: Props) {
       const listId = parsePlaylist(text);
       if (!ytId) {
         if (listId) {
-          void openPlaylist(listId);
+          openPlaylist(listId);
           return true;
         }
         say({ text: "That isn’t a YouTube link or video id.", error: true });
         return false;
       }
       // A video inside a playlist: just the video, and a way to the rest.
-      const inList = listId ? { label: "Open the playlist", run: () => void openPlaylist(listId) } : undefined;
+      const inList = listId ? { label: "Open the playlist", run: () => openPlaylist(listId) } : undefined;
       try {
         const res = await requestYoutube(text, replace);
         if (res.video) {
@@ -84,6 +77,51 @@ export function useYoutube({ keepJobs, keepPlaylist, say }: Props) {
     },
     [openPlaylist, keepJobs, say],
   );
+
+  return { runSearch, openPlaylist, addLink };
+}
+
+/**
+ * The search page's YouTube: the search and the playlist its address names,
+ * each read when it changes (cancelling the one being read), and closing one
+ * takes it out of the address.
+ */
+export function useYoutubeShown({ shown, keepJobs, keepPlaylist, say }: Props & { shown: Shown; keepPlaylist: (p: Playlist) => void }) {
+  const router = useRouter();
+  const { q, list } = shown;
+  const [search, setSearch] = useState<Search | null>(null);
+  const [preview, setPreview] = useState<Preview | null>(null);
+
+  useEffect(() => {
+    if (!q) {
+      setSearch(null);
+      return;
+    }
+    const abort = new AbortController();
+    setSearch({ query: q, results: null });
+    searchYoutube(q, abort.signal).then(
+      (results) => setSearch({ query: q, results }),
+      (err) => abort.signal.aborted || setSearch({ query: q, results: null, error: errorMessage(err) }),
+    );
+    return () => abort.abort();
+  }, [q]);
+
+  useEffect(() => {
+    if (!list) {
+      setPreview(null);
+      return;
+    }
+    const abort = new AbortController();
+    setPreview({ listId: list, playlist: null });
+    inspectPlaylist(list, abort.signal).then(
+      (playlist) => setPreview({ listId: list, playlist }),
+      (err) => abort.signal.aborted || setPreview({ listId: list, playlist: null, error: errorMessage(err) }),
+    );
+    return () => abort.abort();
+  }, [list]);
+
+  const closeSearch = () => router.push(searchHref({ list }));
+  const closePreview = () => router.push(searchHref({ q }));
 
   /** The previewed playlist, whole, into a playlist in the library. */
   const downloadAll = async () => {
@@ -103,25 +141,5 @@ export function useYoutube({ keepJobs, keepPlaylist, say }: Props) {
     }
   };
 
-  /** Search YouTube for videos and playlists. */
-  const runSearch = async (query: string) => {
-    searching.current?.abort();
-    const abort = new AbortController();
-    searching.current = abort;
-    say(null);
-    setSearch({ query, results: null });
-    try {
-      const results = await searchYoutube(query, abort.signal);
-      setSearch({ query, results });
-    } catch (err) {
-      if (abort.signal.aborted) return;
-      setSearch({ query, results: null, error: errorMessage(err) });
-    }
-  };
-  const closeSearch = () => {
-    searching.current?.abort();
-    setSearch(null);
-  };
-
-  return { search, runSearch, closeSearch, preview, openPlaylist, closePreview, downloadAll, addLink };
+  return { search, closeSearch, preview, closePreview, downloadAll };
 }

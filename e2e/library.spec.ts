@@ -54,14 +54,20 @@ test("search, rename and delete from the card", async ({ page, request }) => {
   expect((await request.get(`/api/videos/${v.id}`)).status()).toBe(404);
 });
 
-test("a YouTube search adds a video straight to the library", async ({ page }) => {
+test("a YouTube search from the library goes to the search page, and adds a video straight to the library", async ({ page }) => {
   const query = unique("q").replace(/\W/g, "");
   await page.goto("/");
   await page.getByLabel("YouTube link or search").fill(query);
   await page.getByRole("button", { name: "Search", exact: true }).click();
+  await expect(page).toHaveURL(`/search?q=${query}`);
+  await expect(page.getByRole("link", { name: "Search", exact: true })).toHaveAttribute("aria-current", "page");
   const results = page.getByRole("region", { name: "YouTube results" }).getByRole("list", { name: "Videos" });
   // The live stream (no length) is left out.
   await expect(results.locator(".card")).toHaveCount(3);
+  // The search is in the address: a reload shows it again, and the box has it.
+  await page.reload();
+  await expect(results.locator(".card")).toHaveCount(3);
+  await expect(page.getByLabel("YouTube link or search")).toHaveValue(query);
   const first = results.locator(".card").first();
   await expect(first).toContainText(`Found ${query} 1`);
   await expect(first.locator(".duration")).toHaveText("0:30");
@@ -80,6 +86,10 @@ test("a YouTube search that finds nothing says so, and closes", async ({ page })
   await expect(results).toContainText("YouTube found nothing");
   await results.getByRole("button", { name: "Close the results" }).click();
   await expect(results).toHaveCount(0);
+  await expect(page).toHaveURL(/\/search$/);
+  // Back brings it back.
+  await page.goBack();
+  await expect(results).toContainText("YouTube found nothing");
 });
 
 test("a YouTube playlist from a search downloads whole, and plays through", async ({ page }) => {
@@ -90,6 +100,7 @@ test("a YouTube playlist from a search downloads whole, and plays through", asyn
   const results = page.getByRole("region", { name: "YouTube results" });
   await expect(results.getByRole("list", { name: "Playlists" }).locator(".card")).toHaveCount(2);
   await results.getByRole("button", { name: `Open the playlist List ${query} 1` }).click();
+  await expect(page).toHaveURL(/\/search\?q=.*&list=/);
 
   const preview = page.getByRole("region", { name: "YouTube playlist" });
   await expect(preview.locator(".card")).toHaveCount(3);
@@ -127,29 +138,34 @@ test("a pasted playlist link opens the playlist instead of downloading", async (
   await page.goto("/");
   await page.getByLabel("YouTube link or search").fill("https://www.youtube.com/playlist?list=PLpasted00001");
   await page.getByRole("button", { name: "Open", exact: true }).click();
+  await expect(page).toHaveURL("/search?list=PLpasted00001");
   const preview = page.getByRole("region", { name: "YouTube playlist" });
   await expect(preview).toContainText("Stub playlist PLpasted00001");
   await expect(preview.locator(".card")).toHaveCount(3);
   await preview.getByRole("button", { name: "Close the playlist" }).click();
   await expect(preview).toHaveCount(0);
+  await expect(page).toHaveURL(/\/search$/);
 });
 
 test("make a playlist, add a video from its card, and trim, rename and delete it on its page", async ({ page, request }) => {
   const v = await upload(request, `${unique("Collect")}.mp4`);
   const name = unique("Mix");
-  await page.goto("/");
+  await page.goto("/playlists");
   await page.getByRole("button", { name: "New playlist" }).click();
   await page.getByLabel("New playlist name").fill(name);
   await page.getByRole("button", { name: "Create", exact: true }).click();
   const list = page.locator(".playlists .card", { hasText: name });
   await expect(list).toContainText("0 videos");
 
+  await page.getByRole("link", { name: "Library", exact: true }).click();
   const card = page.locator(`[data-video="${v.id}"]`);
   await card.getByRole("button", { name: /^More for/ }).click();
   await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
   const item = page.getByRole("menuitemcheckbox", { name });
   await item.click();
   await expect(item).toHaveAttribute("aria-checked", "true");
+  await page.keyboard.press("Escape");
+  await page.getByRole("link", { name: "Playlists", exact: true }).click();
   await expect(list).toContainText("1 video");
 
   await list.locator("a.thumb").click();
@@ -166,7 +182,7 @@ test("make a playlist, add a video from its card, and trim, rename and delete it
 
   await page.getByRole("button", { name: "Delete" }).click();
   await page.getByRole("button", { name: "Delete" }).click();
-  await expect(page).toHaveURL(/\/$/);
+  await expect(page).toHaveURL(/\/playlists$/);
   await expect(page.locator(".playlists .card", { hasText: name })).toHaveCount(0);
   // The video stays.
   expect((await request.get(`/api/videos/${v.id}`)).status()).toBe(200);
@@ -175,11 +191,14 @@ test("make a playlist, add a video from its card, and trim, rename and delete it
 test("back from a video, the library shows what changed while it was open", async ({ page, request }) => {
   const v = await upload(request, `${unique("Backed")}.mp4`);
   const name = unique("Made before leaving");
-  await page.goto("/");
+  await page.goto("/playlists");
   await page.getByRole("button", { name: "New playlist" }).click();
   await page.getByLabel("New playlist name").fill(name);
   await page.getByRole("button", { name: "Create", exact: true }).click();
   await expect(page.locator(".playlists .card", { hasText: name })).toBeVisible();
+  // The library, reached from the tabs, has it.
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page).toHaveURL(/\/$/);
 
   await page.locator(`[data-video="${v.id}"] a.thumb`).click();
   await expect(page).toHaveURL(/\/v\//);
@@ -187,7 +206,6 @@ test("back from a video, the library shows what changed while it was open", asyn
   await request.patch(`/api/videos/${v.id}`, { data: { title: `${v.title} elsewhere` } });
   // Back restores the page from history, as it was when it was left.
   await page.goBack();
-  await expect(page.locator(".playlists .card", { hasText: name })).toBeVisible();
   await expect(page.locator(`[data-video="${v.id}"] .card-title`)).toHaveText(`${v.title} elsewhere`);
   await page.locator(`[data-video="${v.id}"]`).getByRole("button", { name: /^More for/ }).click();
   await page.getByRole("menuitem", { name: "Add to playlist…" }).click();
@@ -202,4 +220,23 @@ test("music picked goes up and into the grid, with its cover and artist", async 
   await expect(card.locator(".duration")).toHaveText("0:05");
   await expect(card.locator(".thumb.is-music img")).toBeVisible();
   await expect(card.locator(".card-meta")).toContainText("The Testers · not played yet");
+});
+
+test("the tabs go from section to section, and say which is open", async ({ page }) => {
+  await page.goto("/");
+  const tabs = page.getByRole("navigation", { name: "Sections" });
+  await expect(tabs.getByRole("link", { name: "Library", exact: true })).toHaveAttribute("aria-current", "page");
+  const sections: [string, RegExp, RegExp | null][] = [
+    ["Playlists", /\/playlists$/, /Playlists/],
+    ["Search", /\/search$/, null],
+    // Set up here, with the stub; maybe not on a server tested from outside.
+    ...(process.env.MEDIA_E2E_URL ? [] : [["Transmission", /\/transmission$/, /Transmission/] as [string, RegExp, RegExp]]),
+    ["Library", /\/$/, /library/i],
+  ];
+  for (const [name, url, heading] of sections) {
+    await tabs.getByRole("link", { name, exact: true }).click();
+    await expect(page).toHaveURL(url);
+    await expect(tabs.getByRole("link", { name, exact: true })).toHaveAttribute("aria-current", "page");
+    if (heading) await expect(page.getByRole("heading", { level: 1 })).toContainText(heading);
+  }
 });

@@ -11,9 +11,9 @@ type Props = {
   title?: string;
   /** A page outside the library (a share link's, the lock's): the wordmark leads nowhere, and there's no now playing. */
   standalone?: boolean;
-  /** Settings' button, after the theme's (the library's top bar). */
+  /** Settings' button, after the theme's (the sections' top bars: the ones with tabs). */
   settings?: boolean;
-  /** Between the wordmark and the right side (the library's search). */
+  /** Between the wordmark and the right side (the library's and the playlists' search). */
   children?: React.ReactNode;
   /** On the right, after now playing (the library's storage meter). */
   right?: React.ReactNode;
@@ -58,3 +58,6 @@ export default function Topbar({ back, title, standalone = false, settings = fal
 
 /** Back to the library. */
 export const toLibrary = { href: "/", label: "Back to the library", title: "Library" };
+
+/** Back to the playlists. */
+export const toPlaylists = { href: "/playlists", label: "Back to the playlists", title: "Playlists" };

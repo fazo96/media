@@ -7,7 +7,7 @@ import { formatSize } from "@/lib/format";
 import { local } from "@/lib/storage";
 import { isActive, type Job, type Torrent, type TorrentFile } from "@/lib/types";
 import { playerHref } from "@/lib/urls";
-import { IconClose, IconRefresh, IconSearch } from "./icons";
+import { IconRefresh, IconSearch } from "./icons";
 
 const REMOVE_KEY = "media:transmission-remove";
 const fileName = (f: TorrentFile) => f.name.split("/").pop() ?? f.name;
@@ -17,11 +17,10 @@ type Props = {
   jobs: Job[];
   /** An import was queued: its job joins the page's. */
   onJob: (job: Job) => void;
-  onClose: () => void;
 };
 
 /** Transmission's torrents with a video in them: import their finished files, then (by default) remove the torrent. */
-export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
+export default function TransmissionPanel({ jobs, onJob }: Props) {
   const [torrents, setTorrents] = useState<Torrent[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [filter, setFilter] = useState("");
@@ -88,15 +87,12 @@ export default function TransmissionPanel({ jobs, onJob, onClose }: Props) {
   };
 
   return (
-    <section className="results" aria-label="Transmission">
+    <section aria-label="Transmission">
       <div className="shelf-head">
-        <h2 className="shelf-title">Transmission</h2>
+        <h1 className="shelf-title">Transmission</h1>
         <div className="shelf-actions">
           <button type="button" className="icon-btn" onClick={() => void load()} aria-label="Refresh" title="Refresh">
             <IconRefresh />
-          </button>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close Transmission" title="Close">
-            <IconClose />
           </button>
         </div>
       </div>

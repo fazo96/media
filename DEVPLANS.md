@@ -5,8 +5,8 @@ What's next, roughly in order. Each gets planned properly before it starts.
 - [x] **Refactor pass**: clean the codebase up before any of the below.
 - [ ] **List view**: the library as a list (title, channel or artist, duration, added, plays), beside the grid, remembered per device.
 - [ ] **Multi-select**: pick several videos at once to add them to a playlist in bulk.
-- [ ] **Playlists page**: playlists get their own page instead of a shelf on the library.
-- [ ] **Search page**: YouTube search (and its playlist previews) on its own page instead of above the library.
+- [x] **Playlists page**: playlists get their own page instead of a shelf on the library.
+- [x] **Search page**: YouTube search (and its playlist previews) on its own page instead of above the library.
 - [ ] **Preview before downloading**: watch or listen to a YouTube video or a torrent's file before adding it to the library.
 - [ ] **Choose playlists when adding**: pick the playlists a video goes into as it's added (download, import, upload).
 - [ ] **"Add as Music"**: add something (a YouTube video, say) as music rather than as a video.

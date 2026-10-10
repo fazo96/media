@@ -28,7 +28,8 @@ test("the API lists torrents' videos and refuses what it can't import", async ({
 
 test("import a torrent's video, and the torrent goes from Transmission", async ({ page }) => {
   await page.goto("/");
-  await page.getByRole("button", { name: "Transmission", exact: true }).click();
+  await page.getByRole("link", { name: "Transmission", exact: true }).click();
+  await expect(page).toHaveURL(/\/transmission$/);
   const panel = page.getByRole("region", { name: "Transmission" });
   const movie = panel.locator(`[data-torrent="${MOVIE}"]`);
   await expect(movie).toContainText("Stub.Movie.2020.1080p.mp4");
@@ -38,14 +39,14 @@ test("import a torrent's video, and the torrent goes from Transmission", async (
 
   await expect(panel.getByLabel(/Then delete the torrent/)).toBeChecked();
   await movie.getByRole("button", { name: "Import" }).click();
-  await expect(page.locator(".card", { hasText: "Stub Movie 2020 1080p" }).locator("a.thumb")).toBeVisible({ timeout: 30_000 });
-  await expect(movie).toHaveCount(0);
+  await expect(movie).toHaveCount(0, { timeout: 30_000 });
   expect((await stub("stub-removed")).removed).toEqual([{ hash: MOVIE, deleteLocalData: true }]);
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page.locator(".card", { hasText: "Stub Movie 2020 1080p" }).locator("a.thumb")).toBeVisible();
 });
 
 test("deleting a torrent with other videos asks first; without deleting, it stays", async ({ page }) => {
-  await page.goto("/");
-  await page.getByRole("button", { name: "Transmission", exact: true }).click();
+  await page.goto("/transmission");
   const panel = page.getByRole("region", { name: "Transmission" });
   const series = panel.locator(`[data-torrent="${SERIES}"]`);
   await series.locator(".torrent-file", { hasText: "Episode 1.mp4" }).getByRole("button", { name: "Import" }).click();
@@ -56,10 +57,12 @@ test("deleting a torrent with other videos asks first; without deleting, it stay
   await panel.getByLabel(/Then delete the torrent/).uncheck();
   await series.getByRole("button", { name: "Import all (2)" }).click();
   await expect(series.getByRole("link", { name: "In the library" })).toHaveCount(2, { timeout: 30_000 });
-  await expect(page.locator(".card", { hasText: "Episode 2" }).locator("a.thumb")).toBeVisible();
   expect((await stub("stub-removed")).removed).toEqual([]);
+  await page.getByRole("link", { name: "Library", exact: true }).click();
+  await expect(page.locator(".card", { hasText: "Episode 2" }).locator("a.thumb")).toBeVisible();
 
   // Import all made a playlist of them, named after the torrent, in order.
+  await page.getByRole("link", { name: "Playlists", exact: true }).click();
   await page.getByRole("link", { name: "Open the playlist Stub Series" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Stub Series" })).toBeVisible();
   await expect(page.locator(".pl-item .other-title")).toHaveText(["Episode 1", "Episode 2"]);
